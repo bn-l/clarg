@@ -1,0 +1,11 @@
+mod required_fields;
+mod optional_fields;
+mod tool_input;
+mod helper_methods;
+mod claude_tools;
+mod unicode_and_strings;
+mod paths;
+mod types_and_fields;
+mod permission_and_events;
+mod complex_scenarios;
+mod edge_cases;

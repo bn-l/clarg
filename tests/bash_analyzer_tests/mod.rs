@@ -1,0 +1,11 @@
+mod cd_command;
+mod download_commands;
+mod eval_and_shell;
+mod exec_commands;
+mod file_commands;
+mod looks_like_path;
+mod redirections;
+mod search_commands;
+mod sed_command;
+mod split_shell_operators;
+mod unknown_commands;
