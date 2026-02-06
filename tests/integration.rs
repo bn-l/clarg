@@ -44,9 +44,14 @@ fn run_clarg(args: &[&str], stdin: &str) -> (i32, String, String) {
 
 #[test]
 fn test_block_env_file_read() {
-    let input = hook_json(
+    let tmp = tempfile::tempdir().unwrap();
+    let canonical = tmp.path().canonicalize().unwrap();
+    let cwd = canonical.to_str().unwrap();
+
+    let input = hook_json_with_cwd(
         "Read",
-        serde_json::json!({"file_path": "/tmp/test-project/.env"}),
+        serde_json::json!({"file_path": format!("{}/.env", cwd)}),
+        cwd,
     );
     let (code, stdout, stderr) = run_clarg(&["-b", ".env"], &input);
     assert_eq!(code, 2, "should exit 2 (block)");
@@ -63,9 +68,14 @@ fn test_block_env_file_read() {
 
 #[test]
 fn test_allow_normal_file_read() {
-    let input = hook_json(
+    let tmp = tempfile::tempdir().unwrap();
+    let canonical = tmp.path().canonicalize().unwrap();
+    let cwd = canonical.to_str().unwrap();
+
+    let input = hook_json_with_cwd(
         "Read",
-        serde_json::json!({"file_path": "/tmp/test-project/src/main.rs"}),
+        serde_json::json!({"file_path": format!("{}/src/main.rs", cwd)}),
+        cwd,
     );
     let (code, stdout, _stderr) = run_clarg(&["-b", ".env"], &input);
     assert_eq!(code, 0, "should exit 0 (allow)");
@@ -160,7 +170,7 @@ fn test_block_eval_external() {
     .to_string();
     let (code, _stdout, stderr) = run_clarg(&["-i"], &input);
     assert_eq!(code, 2, "should block eval with external path");
-    assert!(stderr.contains("eval"));
+    assert!(stderr.contains("Blocked by `clarg`"));
 }
 
 // --- Block bash -c "cd /tmp" (with -i) ---
@@ -187,6 +197,8 @@ fn test_block_bash_c_external() {
 #[test]
 fn test_yaml_config_equivalent() {
     let tmp = tempfile::tempdir().unwrap();
+    let canonical = tmp.path().canonicalize().unwrap();
+    let cwd = canonical.to_str().unwrap();
     let config_path = tmp.path().join("config.yaml");
     std::fs::write(
         &config_path,
@@ -195,17 +207,22 @@ fn test_yaml_config_equivalent() {
     .unwrap();
 
     // Test blocked file
-    let input = hook_json(
+    let input = hook_json_with_cwd(
         "Read",
-        serde_json::json!({"file_path": "/tmp/test-project/.env"}),
+        serde_json::json!({"file_path": format!("{}/.env", cwd)}),
+        cwd,
     );
     let (code, stdout, _) = run_clarg(&[config_path.to_str().unwrap()], &input);
     assert_eq!(code, 2);
     let json: serde_json::Value = serde_json::from_str(&stdout).unwrap();
     assert_eq!(json["hookSpecificOutput"]["permissionDecision"], "deny");
 
-    // Test blocked command
-    let input = hook_json("Bash", serde_json::json!({"command": "rm -rf /tmp"}));
+    // Test blocked command (uses hook_json_with_cwd for consistent cwd)
+    let input = hook_json_with_cwd(
+        "Bash",
+        serde_json::json!({"command": "rm -rf /tmp"}),
+        cwd,
+    );
     let (code, _, _) = run_clarg(&[config_path.to_str().unwrap()], &input);
     assert_eq!(code, 2);
 }
@@ -307,10 +324,10 @@ fn test_task_tool_allowed() {
     assert_eq!(code, 0, "Task should always be allowed");
 }
 
-// --- Unknown tool passes through ---
+// --- Unknown tool denied by default ---
 
 #[test]
-fn test_unknown_tool_passes() {
+fn test_unknown_tool_denied() {
     let tmp = tempfile::tempdir().unwrap();
     let canonical = tmp.path().canonicalize().unwrap();
     let cwd = canonical.to_str().unwrap();
@@ -320,17 +337,25 @@ fn test_unknown_tool_passes() {
         serde_json::json!({"anything": "here"}),
         cwd,
     );
-    let (code, _, _) = run_clarg(&["-i", "-b", ".env"], &input);
-    assert_eq!(code, 0, "unknown tools should pass through");
+    let (code, stdout, stderr) = run_clarg(&["-i", "-b", ".env"], &input);
+    assert_eq!(code, 2, "unknown tools should be denied");
+    let json: serde_json::Value = serde_json::from_str(&stdout).expect("stdout should be JSON");
+    assert_eq!(json["hookSpecificOutput"]["permissionDecision"], "deny");
+    assert!(stderr.contains("unknown tool"));
 }
 
 // --- Multiple blocked file patterns ---
 
 #[test]
 fn test_multiple_blocked_patterns() {
-    let input = hook_json(
+    let tmp = tempfile::tempdir().unwrap();
+    let canonical = tmp.path().canonicalize().unwrap();
+    let cwd = canonical.to_str().unwrap();
+
+    let input = hook_json_with_cwd(
         "Read",
-        serde_json::json!({"file_path": "/tmp/test-project/api.secret"}),
+        serde_json::json!({"file_path": format!("{}/api.secret", cwd)}),
+        cwd,
     );
     let (code, _, _) = run_clarg(&["-b", ".env,*.secret"], &input);
     assert_eq!(code, 2, "*.secret should be blocked");

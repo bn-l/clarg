@@ -1,6 +1,8 @@
 use eyre::{Result, WrapErr};
 use regex::Regex;
 
+use crate::util::truncate;
+
 pub struct BlockedCommandsRule {
     patterns: Vec<(Regex, String)>, // (compiled regex, original pattern string)
 }
@@ -32,13 +34,5 @@ impl BlockedCommandsRule {
             }
         }
         None
-    }
-}
-
-fn truncate(s: &str, max: usize) -> &str {
-    if s.len() <= max {
-        s
-    } else {
-        &s[..s.floor_char_boundary(max)]
     }
 }

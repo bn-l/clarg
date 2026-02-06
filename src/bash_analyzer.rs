@@ -1,4 +1,5 @@
 use crate::internalonly::{check_path_containment, resolve_target};
+use crate::util::truncate;
 use regex::Regex;
 use std::path::Path;
 use std::sync::LazyLock;
@@ -48,64 +49,133 @@ const INLINE_CODE_INTERPRETERS: &[&str] = &[
 /// Download commands where specific flags point to output paths.
 const DOWNLOAD_COMMANDS: &[&str] = &["curl", "wget"];
 
-/// Analyze a full bash command string for paths outside the project root.
-/// Returns Some(reason) if any violation is found.
-pub fn analyze(command: &str, project_root: &Path) -> Option<String> {
-    analyze_recursive(command, project_root, 0)
+/// Regex to extract absolute paths and home paths from inline code strings.
+static PATH_IN_CODE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"(?:/[a-zA-Z0-9_.@-][a-zA-Z0-9_.@/-]*|~/[a-zA-Z0-9_.@/-]+|\$HOME/[a-zA-Z0-9_.@/-]+)"#).unwrap()
+});
+
+// ============================================================================
+// Extracted path types
+// ============================================================================
+
+/// A filesystem path extracted from a bash command, tagged with how it was referenced.
+#[derive(Debug, Clone)]
+pub struct ExtractedPath {
+    pub raw: String,
+    pub context: PathContext,
 }
 
-fn analyze_recursive(
-    command: &str,
-    project_root: &Path,
-    depth: usize,
-) -> Option<String> {
-    if depth > MAX_RECURSION {
-        return None;
-    }
+/// Context for how a path was referenced in a command.
+#[derive(Debug, Clone)]
+pub enum PathContext {
+    /// Shell output redirection (>, >>, 2>, &>)
+    Redirection,
+    /// Explicit cd target
+    CdTarget,
+    /// cd with no arguments (implicit $HOME navigation)
+    CdImplicitHome,
+    /// cd - (unpredictable navigation)
+    CdDash,
+    /// Argument to a file-manipulating command (cat, cp, mv, rm, etc.)
+    FileCommandArg,
+    /// Path argument to a search command (rg, grep, find, fd, etc.)
+    SearchCommandArg,
+    /// Script/file argument to an exec command (python, node, etc.)
+    ExecTarget,
+    /// Path found inside inline code (python -c, node -e, etc.)
+    InlineCodeRef {
+        interpreter: String,
+        flag: String,
+        code_snippet: String,
+    },
+    /// Output path for download commands (curl -o, wget -O)
+    DownloadOutput,
+    /// Upload/data file path for curl (-d @file, -F, -T, etc.)
+    UploadData,
+    /// File argument to sed
+    SedFile,
+    /// Path argument to dd (if=, of=)
+    DdPath,
+    /// Path-like argument to an unrecognized command
+    UnknownCommandArg,
+}
 
-    // Phase 1: Check output redirections
-    for cap in REDIRECT_RE.captures_iter(command) {
-        let target = &cap[1];
-        // Skip /dev/null and other special paths
-        if target.starts_with("/dev/") {
-            continue;
+impl PathContext {
+    /// Label for use in containment error messages.
+    pub fn label(&self) -> &str {
+        match self {
+            PathContext::Redirection => "redirection target",
+            PathContext::DownloadOutput => "download output path",
+            PathContext::UploadData => "upload/data file path",
+            // InlineCodeRef has custom message handling in check_extracted_path
+            _ => "path",
         }
-        let resolved = resolve_target(target, project_root);
-        if let Some(reason) = check_path_containment(
-            &resolved,
-            project_root,
-            &format!("redirection target"),
-        ) {
+    }
+}
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+/// Analyze a full bash command string for paths outside the project root.
+/// Returns Some(reason) if any violation is found.
+///
+/// This is a convenience wrapper over `extract_paths` that checks each extracted
+/// path for containment within the project root.
+pub fn analyze(command: &str, project_root: &Path) -> Option<String> {
+    let paths = extract_paths(command);
+    for ep in paths {
+        if let Some(reason) = check_extracted_path(&ep, project_root) {
             return Some(reason);
         }
     }
-
-    // Phase 2: Split on shell operators and analyze each sub-command
-    let sub_commands = split_shell_operators(command);
-    for sub_cmd in &sub_commands {
-        let trimmed = sub_cmd.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        if let Some(reason) =
-            analyze_sub_command(trimmed, project_root, depth)
-        {
-            return Some(reason);
-        }
-    }
-
     None
 }
 
 /// Extract all filesystem paths referenced by a bash command.
-/// Used by the router to check extracted paths against blocked_files rules.
-pub fn extract_paths(command: &str) -> Vec<String> {
+/// Returns structured results with context about how each path was referenced.
+pub fn extract_paths(command: &str) -> Vec<ExtractedPath> {
     let mut paths = Vec::new();
     extract_paths_recursive(command, &mut paths, 0);
     paths
 }
 
-fn extract_paths_recursive(command: &str, paths: &mut Vec<String>, depth: usize) {
+// ============================================================================
+// Containment checking (used by analyze())
+// ============================================================================
+
+/// Check a single extracted path for containment violations.
+fn check_extracted_path(ep: &ExtractedPath, project_root: &Path) -> Option<String> {
+    match &ep.context {
+        PathContext::CdImplicitHome => Some(
+            "Blocked by `clarg`: 'cd' with no arguments would navigate to $HOME, outside the project directory".to_string()
+        ),
+        PathContext::CdDash => Some(
+            "Blocked by `clarg`: 'cd -' could navigate outside the project directory".to_string()
+        ),
+        PathContext::InlineCodeRef { interpreter, flag, code_snippet } => {
+            let resolved = resolve_target(&ep.raw, project_root);
+            if check_path_containment(&resolved, project_root, "path").is_some() {
+                Some(format!(
+                    "Blocked by `clarg`: '{} {} \"{}\"' references external path '{}'",
+                    interpreter, flag, truncate(code_snippet, 80), ep.raw
+                ))
+            } else {
+                None
+            }
+        }
+        _ => {
+            let resolved = resolve_target(&ep.raw, project_root);
+            check_path_containment(&resolved, project_root, ep.context.label())
+        }
+    }
+}
+
+// ============================================================================
+// Extraction engine (single parser — the only place command structure is parsed)
+// ============================================================================
+
+fn extract_paths_recursive(command: &str, paths: &mut Vec<ExtractedPath>, depth: usize) {
     if depth > MAX_RECURSION {
         return;
     }
@@ -114,7 +184,10 @@ fn extract_paths_recursive(command: &str, paths: &mut Vec<String>, depth: usize)
     for cap in REDIRECT_RE.captures_iter(command) {
         let target = &cap[1];
         if !target.starts_with("/dev/") {
-            paths.push(target.to_string());
+            paths.push(ExtractedPath {
+                raw: target.to_string(),
+                context: PathContext::Redirection,
+            });
         }
     }
 
@@ -129,7 +202,7 @@ fn extract_paths_recursive(command: &str, paths: &mut Vec<String>, depth: usize)
     }
 }
 
-fn extract_paths_from_sub_command(sub_cmd: &str, paths: &mut Vec<String>, depth: usize) {
+fn extract_paths_from_sub_command(sub_cmd: &str, paths: &mut Vec<ExtractedPath>, depth: usize) {
     let cleaned = REDIRECT_RE.replace_all(sub_cmd, "");
     let tokens = match shlex::split(&cleaned) {
         Some(t) => t,
@@ -160,10 +233,21 @@ fn extract_paths_from_sub_command(sub_cmd: &str, paths: &mut Vec<String>, depth:
 
     match cmd_name.as_str() {
         "cd" => {
-            if let Some(target) = args.first() {
-                if target != "-" {
-                    paths.push(target.clone());
-                }
+            if args.is_empty() {
+                paths.push(ExtractedPath {
+                    raw: String::new(),
+                    context: PathContext::CdImplicitHome,
+                });
+            } else if args[0] == "-" {
+                paths.push(ExtractedPath {
+                    raw: "-".to_string(),
+                    context: PathContext::CdDash,
+                });
+            } else {
+                paths.push(ExtractedPath {
+                    raw: args[0].clone(),
+                    context: PathContext::CdTarget,
+                });
             }
         }
         "eval" => {
@@ -181,7 +265,10 @@ fn extract_paths_from_sub_command(sub_cmd: &str, paths: &mut Vec<String>, depth:
             // Treat as script execution
             for arg in args {
                 if !arg.starts_with('-') {
-                    paths.push(arg.clone());
+                    paths.push(ExtractedPath {
+                        raw: arg.clone(),
+                        context: PathContext::ExecTarget,
+                    });
                     break;
                 }
             }
@@ -189,7 +276,10 @@ fn extract_paths_from_sub_command(sub_cmd: &str, paths: &mut Vec<String>, depth:
         cmd if FILE_COMMANDS.contains(&cmd) => {
             for arg in args {
                 if !arg.starts_with('-') {
-                    paths.push(arg.clone());
+                    paths.push(ExtractedPath {
+                        raw: arg.clone(),
+                        context: PathContext::FileCommandArg,
+                    });
                 }
             }
         }
@@ -209,14 +299,46 @@ fn extract_paths_from_sub_command(sub_cmd: &str, paths: &mut Vec<String>, depth:
                     i += 1;
                     continue;
                 }
-                paths.push(arg.clone());
+                paths.push(ExtractedPath {
+                    raw: arg.clone(),
+                    context: PathContext::SearchCommandArg,
+                });
                 i += 1;
             }
         }
         cmd if EXEC_COMMANDS.contains(&cmd) => {
+            // Check for inline code interpreters first
+            if INLINE_CODE_INTERPRETERS.contains(&cmd) {
+                let code_flags: &[&str] = match cmd {
+                    "node" => &["-e", "--eval"],
+                    _ => &["-c", "-e"],
+                };
+                if let Some(pos) = args.iter().position(|t| code_flags.contains(&t.as_str())) {
+                    if let Some(code_arg) = args.get(pos + 1) {
+                        for mat in PATH_IN_CODE_RE.find_iter(code_arg) {
+                            let path_str = mat.as_str();
+                            if !path_str.starts_with("/dev/") {
+                                paths.push(ExtractedPath {
+                                    raw: path_str.to_string(),
+                                    context: PathContext::InlineCodeRef {
+                                        interpreter: cmd.to_string(),
+                                        flag: args[pos].clone(),
+                                        code_snippet: code_arg.clone(),
+                                    },
+                                });
+                            }
+                        }
+                        return;
+                    }
+                }
+            }
+            // Normal exec: first non-flag arg is the script path
             for arg in args {
                 if !arg.starts_with('-') {
-                    paths.push(arg.clone());
+                    paths.push(ExtractedPath {
+                        raw: arg.clone(),
+                        context: PathContext::ExecTarget,
+                    });
                     break;
                 }
             }
@@ -228,28 +350,45 @@ fn extract_paths_from_sub_command(sub_cmd: &str, paths: &mut Vec<String>, depth:
             extract_sed_paths(args, paths);
         }
         "dd" => {
-            // dd uses key=value syntax; extract values from if= and of=
             let path_keys = ["if", "of"];
             for arg in args {
                 if let Some((key, value)) = arg.split_once('=') {
                     if path_keys.contains(&key) {
-                        paths.push(value.to_string());
+                        paths.push(ExtractedPath {
+                            raw: value.to_string(),
+                            context: PathContext::DdPath,
+                        });
                     }
                 }
             }
         }
         _ => {
             for arg in args {
-                if !arg.starts_with('-') && looks_like_path(arg) {
-                    paths.push(arg.clone());
+                if arg.starts_with('-') {
+                    // Check --flag=value patterns for embedded paths
+                    if let Some((_flag, value)) = arg.split_once('=') {
+                        if looks_like_path(value) {
+                            paths.push(ExtractedPath {
+                                raw: value.to_string(),
+                                context: PathContext::UnknownCommandArg,
+                            });
+                        }
+                    }
+                    continue;
+                }
+                if looks_like_path(arg) {
+                    paths.push(ExtractedPath {
+                        raw: arg.clone(),
+                        context: PathContext::UnknownCommandArg,
+                    });
                 }
             }
         }
     }
 }
 
-/// Extract paths from download command arguments (for extract_paths).
-fn extract_download_paths(args: &[String], cmd: &str, paths: &mut Vec<String>) {
+/// Extract paths from download command arguments.
+fn extract_download_paths(args: &[String], cmd: &str, paths: &mut Vec<ExtractedPath>) {
     let output_flags: &[&str] = match cmd {
         "curl" => &["-o", "--output"],
         "wget" => &["-O", "--output-document"],
@@ -272,7 +411,10 @@ fn extract_download_paths(args: &[String], cmd: &str, paths: &mut Vec<String>) {
         let arg = &args[i];
         if output_flags.contains(&arg.as_str()) {
             if let Some(path_arg) = args.get(i + 1) {
-                paths.push(path_arg.clone());
+                paths.push(ExtractedPath {
+                    raw: path_arg.clone(),
+                    context: PathContext::DownloadOutput,
+                });
             }
             i += 2;
             continue;
@@ -280,7 +422,10 @@ fn extract_download_paths(args: &[String], cmd: &str, paths: &mut Vec<String>) {
         if data_long_flags.contains(&arg.as_str()) || data_short_flags.contains(&arg.as_str()) {
             if let Some(data_arg) = args.get(i + 1) {
                 if let Some(p) = extract_path_from_curl_data(data_arg) {
-                    paths.push(p);
+                    paths.push(ExtractedPath {
+                        raw: p,
+                        context: PathContext::UploadData,
+                    });
                 }
             }
             i += 2;
@@ -291,10 +436,16 @@ fn extract_download_paths(args: &[String], cmd: &str, paths: &mut Vec<String>) {
             if let Some(value) = arg.strip_prefix(&format!("{flag}=")) {
                 if data_long_flags.contains(flag) {
                     if let Some(p) = extract_path_from_curl_data(value) {
-                        paths.push(p);
+                        paths.push(ExtractedPath {
+                            raw: p,
+                            context: PathContext::UploadData,
+                        });
                     }
                 } else {
-                    paths.push(value.to_string());
+                    paths.push(ExtractedPath {
+                        raw: value.to_string(),
+                        context: PathContext::DownloadOutput,
+                    });
                 }
             }
         }
@@ -303,7 +454,10 @@ fn extract_download_paths(args: &[String], cmd: &str, paths: &mut Vec<String>) {
             if arg.starts_with(flag) && arg.len() > flag.len() {
                 let value = &arg[flag.len()..];
                 if let Some(p) = extract_path_from_curl_data(value) {
-                    paths.push(p);
+                    paths.push(ExtractedPath {
+                        raw: p,
+                        context: PathContext::UploadData,
+                    });
                 }
             }
         }
@@ -311,7 +465,7 @@ fn extract_download_paths(args: &[String], cmd: &str, paths: &mut Vec<String>) {
     }
 }
 
-/// Extract a path from a curl data argument (for extract_paths).
+/// Extract a path from a curl data argument.
 fn extract_path_from_curl_data(data_arg: &str) -> Option<String> {
     if let Some(at_path) = data_arg.strip_prefix('@') {
         if !at_path.is_empty() {
@@ -329,8 +483,8 @@ fn extract_path_from_curl_data(data_arg: &str) -> Option<String> {
     None
 }
 
-/// Extract paths from sed arguments (for extract_paths).
-fn extract_sed_paths(args: &[String], paths: &mut Vec<String>) {
+/// Extract paths from sed arguments.
+fn extract_sed_paths(args: &[String], paths: &mut Vec<ExtractedPath>) {
     let mut i = 0;
     let mut skip_next = false;
     while i < args.len() {
@@ -354,11 +508,18 @@ fn extract_sed_paths(args: &[String], paths: &mut Vec<String>) {
             continue;
         }
         if looks_like_path(arg) {
-            paths.push(arg.clone());
+            paths.push(ExtractedPath {
+                raw: arg.clone(),
+                context: PathContext::SedFile,
+            });
         }
         i += 1;
     }
 }
+
+// ============================================================================
+// Shell operator splitting
+// ============================================================================
 
 /// Split a command string on shell operators (&&, ||, ;, |) while respecting quotes.
 pub fn split_shell_operators(command: &str) -> Vec<String> {
@@ -428,479 +589,9 @@ pub fn split_shell_operators(command: &str) -> Vec<String> {
     parts
 }
 
-/// Analyze a single sub-command (no shell operators).
-fn analyze_sub_command(
-    sub_cmd: &str,
-    project_root: &Path,
-    depth: usize,
-) -> Option<String> {
-    // Strip the redirection parts from the command string before tokenizing,
-    // since we already checked redirections in the outer function.
-    let cleaned = REDIRECT_RE.replace_all(sub_cmd, "");
-    let tokens = match shlex::split(&cleaned) {
-        Some(t) => t,
-        None => return None, // unparseable; we already checked redirections
-    };
-    if tokens.is_empty() {
-        return None;
-    }
-
-    // Skip env var prefixes (KEY=value), sudo, env
-    let mut start = 0;
-    while start < tokens.len() {
-        let t = &tokens[start];
-        if t.contains('=') && !t.starts_with('-') && !t.starts_with('/') {
-            start += 1;
-        } else if t == "sudo" || t == "env" {
-            start += 1;
-        } else {
-            break;
-        }
-    }
-
-    if start >= tokens.len() {
-        return None;
-    }
-
-    let cmd_name = &tokens[start];
-    let args = &tokens[start + 1..];
-
-    // Route by command name
-    match cmd_name.as_str() {
-        "cd" => check_cd(args, project_root),
-        "eval" => check_eval(args, project_root, depth),
-        "bash" | "sh" | "zsh" | "dash" => {
-            check_shell_exec(args, cmd_name, project_root, depth)
-        }
-        cmd if FILE_COMMANDS.contains(&cmd) => {
-            check_generic_file_cmd(args, project_root)
-        }
-        cmd if SEARCH_COMMANDS.contains(&cmd) => {
-            check_search_cmd(args, project_root)
-        }
-        cmd if EXEC_COMMANDS.contains(&cmd) => {
-            check_exec_cmd(args, cmd, project_root, depth)
-        }
-        cmd if DOWNLOAD_COMMANDS.contains(&cmd) => {
-            check_download_cmd(args, cmd, project_root)
-        }
-        "sed" => check_sed(args, project_root),
-        "dd" => check_dd(args, project_root),
-        _ => check_unknown_cmd(args, project_root),
-    }
-}
-
-/// Check `cd` command. Block if target is outside project, no args (-> $HOME), or `-`.
-fn check_cd(args: &[String], project_root: &Path) -> Option<String> {
-    if args.is_empty() {
-        return Some(
-            "Blocked by `clarg`: 'cd' with no arguments would navigate to $HOME, outside the project directory".to_string()
-        );
-    }
-    let target = &args[0];
-    if target == "-" {
-        return Some(
-            "Blocked by `clarg`: 'cd -' could navigate outside the project directory".to_string()
-        );
-    }
-    let resolved = resolve_target(target, project_root);
-    check_path_containment(
-        &resolved,
-        project_root,
-        &format!("'cd {target}' would navigate to"),
-    )
-}
-
-/// Check `eval "..."` — recursively analyze the evaluated string.
-fn check_eval(
-    args: &[String],
-    project_root: &Path,
-    depth: usize,
-) -> Option<String> {
-    if args.is_empty() {
-        return None;
-    }
-    let eval_cmd = args.join(" ");
-    if let Some(reason) = analyze_recursive(&eval_cmd, project_root, depth + 1)
-    {
-        return Some(format!(
-            "Blocked by `clarg`: 'eval \"{}\"' contains a command that {}",
-            truncate(&eval_cmd, 80),
-            extract_core_reason(&reason)
-        ));
-    }
-    None
-}
-
-/// Check `bash -c "..."`, `sh -c "..."`, etc.
-fn check_shell_exec(
-    args: &[String],
-    shell: &str,
-    project_root: &Path,
-    depth: usize,
-) -> Option<String> {
-    // Look for -c flag
-    if let Some(pos) = args.iter().position(|t| t == "-c") {
-        if let Some(inner_cmd) = args.get(pos + 1) {
-            if let Some(reason) =
-                analyze_recursive(inner_cmd, project_root, depth + 1)
-            {
-                return Some(format!(
-                    "Blocked by `clarg`: '{shell} -c \"{}\"' contains a command that {}",
-                    truncate(inner_cmd, 80),
-                    extract_core_reason(&reason)
-                ));
-            }
-            return None;
-        }
-    }
-    // Otherwise treat as executing a script file
-    check_exec_cmd(args, shell, project_root, depth)
-}
-
-/// Check file manipulation commands: skip flags, check remaining args as paths.
-fn check_generic_file_cmd(args: &[String], project_root: &Path) -> Option<String> {
-    for arg in args {
-        if arg.starts_with('-') {
-            continue;
-        }
-        if looks_like_path(arg) {
-            let resolved = resolve_target(arg, project_root);
-            if let Some(reason) =
-                check_path_containment(&resolved, project_root, "path")
-            {
-                return Some(reason);
-            }
-        }
-    }
-    None
-}
-
-/// Check search commands: skip flags and their arguments, check remaining as paths.
-fn check_search_cmd(args: &[String], project_root: &Path) -> Option<String> {
-    let mut i = 0;
-    while i < args.len() {
-        let arg = &args[i];
-        if SEARCH_ARG_FLAGS.contains(&arg.as_str()) {
-            i += 2; // skip flag and its argument
-            continue;
-        }
-        // Handle --flag=value
-        if arg.starts_with('-') && arg.contains('=') {
-            i += 1;
-            continue;
-        }
-        if arg.starts_with('-') {
-            i += 1;
-            continue;
-        }
-        // Non-flag argument — check if it's a path
-        if looks_like_path(arg) {
-            let resolved = resolve_target(arg, project_root);
-            if let Some(reason) =
-                check_path_containment(&resolved, project_root, "path")
-            {
-                return Some(reason);
-            }
-        }
-        i += 1;
-    }
-    None
-}
-
-/// Check execute-like commands (python, node, etc.): check file arguments as paths.
-/// For interpreters that support -c/-e, recursively analyze inline code strings.
-fn check_exec_cmd(
-    args: &[String],
-    cmd: &str,
-    project_root: &Path,
-    depth: usize,
-) -> Option<String> {
-    // For interpreters that support -c/-e, scan inline code for external paths
-    if INLINE_CODE_INTERPRETERS.contains(&cmd) {
-        let code_flags: &[&str] = match cmd {
-            "node" => &["-e", "--eval"],
-            _ => &["-c", "-e"],
-        };
-        if let Some(pos) = args.iter().position(|t| code_flags.contains(&t.as_str())) {
-            if let Some(code_arg) = args.get(pos + 1) {
-                if let Some(reason) =
-                    scan_code_for_paths(code_arg, cmd, &args[pos], project_root)
-                {
-                    return Some(reason);
-                }
-            }
-            return None;
-        }
-    }
-
-    // Otherwise check file path arguments
-    for arg in args {
-        if arg.starts_with('-') {
-            continue;
-        }
-        if looks_like_path(arg) {
-            let resolved = resolve_target(arg, project_root);
-            if let Some(reason) =
-                check_path_containment(&resolved, project_root, "path")
-            {
-                return Some(reason);
-            }
-        }
-        // Only check the first non-flag arg for exec commands
-        break;
-    }
-    None
-}
-
-/// Check download commands: `curl -o <path>`, `wget -O <path>`, and upload flags.
-fn check_download_cmd(
-    args: &[String],
-    cmd: &str,
-    project_root: &Path,
-) -> Option<String> {
-    let output_flags: &[&str] = match cmd {
-        "curl" => &["-o", "--output"],
-        "wget" => &["-O", "--output-document"],
-        _ => &[],
-    };
-
-    // Long flags whose next argument may reference a file path (via @path syntax)
-    let data_long_flags: &[&str] = match cmd {
-        "curl" => &[
-            "--data", "--data-binary", "--data-raw", "--data-urlencode",
-            "--form", "--upload-file",
-        ],
-        _ => &[],
-    };
-
-    // Short flags whose next argument (or concatenated value) may reference a file
-    let data_short_flags: &[&str] = match cmd {
-        "curl" => &["-d", "-F", "-T"],
-        _ => &[],
-    };
-
-    let mut i = 0;
-    while i < args.len() {
-        let arg = &args[i];
-
-        // Check output flags (path is next arg)
-        if output_flags.contains(&arg.as_str()) {
-            if let Some(path_arg) = args.get(i + 1) {
-                let resolved = resolve_target(path_arg, project_root);
-                if let Some(reason) = check_path_containment(
-                    &resolved,
-                    project_root,
-                    "download output path",
-                ) {
-                    return Some(reason);
-                }
-            }
-            i += 2;
-            continue;
-        }
-
-        // Check data/upload long flags as standalone tokens (next arg has value)
-        if data_long_flags.contains(&arg.as_str()) {
-            if let Some(data_arg) = args.get(i + 1) {
-                if let Some(reason) = check_curl_data_path(data_arg, project_root) {
-                    return Some(reason);
-                }
-            }
-            i += 2;
-            continue;
-        }
-
-        // Check data/upload short flags as standalone tokens (next arg has value)
-        if data_short_flags.contains(&arg.as_str()) {
-            if let Some(data_arg) = args.get(i + 1) {
-                if let Some(reason) = check_curl_data_path(data_arg, project_root) {
-                    return Some(reason);
-                }
-            }
-            i += 2;
-            continue;
-        }
-
-        // Handle --output=value
-        for flag in output_flags {
-            if let Some(value) = arg.strip_prefix(&format!("{flag}=")) {
-                let resolved = resolve_target(value, project_root);
-                if let Some(reason) = check_path_containment(
-                    &resolved,
-                    project_root,
-                    "download output path",
-                ) {
-                    return Some(reason);
-                }
-            }
-        }
-
-        // Handle --data=@path, --form=field=@path, --upload-file=path, etc.
-        for flag in data_long_flags {
-            if let Some(value) = arg.strip_prefix(&format!("{flag}=")) {
-                if let Some(reason) = check_curl_data_path(value, project_root) {
-                    return Some(reason);
-                }
-            }
-        }
-
-        // Handle concatenated short flags: -d@path, -Ffile=@path, -T/path
-        for flag in data_short_flags {
-            if arg.starts_with(flag) && arg.len() > flag.len() {
-                let value = &arg[flag.len()..];
-                if let Some(reason) = check_curl_data_path(value, project_root) {
-                    return Some(reason);
-                }
-            }
-        }
-
-        i += 1;
-    }
-    None
-}
-
-/// Check a curl data argument for file path references.
-/// Handles `@path`, `field=@path`, and direct paths (for -T/--upload-file).
-fn check_curl_data_path(data_arg: &str, project_root: &Path) -> Option<String> {
-    let path_str = if let Some(at_path) = data_arg.strip_prefix('@') {
-        at_path
-    } else if data_arg.contains("=@") {
-        match data_arg.split_once("=@") {
-            Some((_, path)) => path,
-            None => return None,
-        }
-    } else if looks_like_path(data_arg) {
-        data_arg
-    } else {
-        return None;
-    };
-
-    if path_str.is_empty() {
-        return None;
-    }
-
-    let resolved = resolve_target(path_str, project_root);
-    check_path_containment(&resolved, project_root, "upload/data file path")
-}
-
-/// Check `sed` specifically: it can take `-i` followed by a suffix, and filenames.
-fn check_sed(args: &[String], project_root: &Path) -> Option<String> {
-    let mut i = 0;
-    let mut skip_next = false;
-    while i < args.len() {
-        if skip_next {
-            skip_next = false;
-            i += 1;
-            continue;
-        }
-        let arg = &args[i];
-        // -e and -f take an argument
-        if arg == "-e" || arg == "-f" {
-            skip_next = true;
-            i += 1;
-            continue;
-        }
-        // -i may have an optional suffix (no space on macOS, space on GNU)
-        if arg == "-i" || arg.starts_with("-i") {
-            i += 1;
-            continue;
-        }
-        if arg.starts_with('-') {
-            i += 1;
-            continue;
-        }
-        // Non-flag: could be a sed expression or a file path
-        // Heuristic: if it contains a path separator or looks like a path, check it
-        if looks_like_path(arg) {
-            let resolved = resolve_target(arg, project_root);
-            if let Some(reason) =
-                check_path_containment(&resolved, project_root, "path")
-            {
-                return Some(reason);
-            }
-        }
-        i += 1;
-    }
-    None
-}
-
-/// Regex to extract absolute paths and home paths from inline code strings.
-static PATH_IN_CODE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?:/[a-zA-Z0-9_.@-][a-zA-Z0-9_.@/-]*|~/[a-zA-Z0-9_.@/-]+|\$HOME/[a-zA-Z0-9_.@/-]+)"#).unwrap()
-});
-
-/// Scan an inline code string (from python -c, node -e, etc.) for external paths.
-fn scan_code_for_paths(
-    code: &str,
-    cmd: &str,
-    flag: &str,
-    project_root: &Path,
-) -> Option<String> {
-    for mat in PATH_IN_CODE_RE.find_iter(code) {
-        let path_str = mat.as_str();
-        // Skip /dev/ paths
-        if path_str.starts_with("/dev/") {
-            continue;
-        }
-        let resolved = resolve_target(path_str, project_root);
-        if let Some(_) = check_path_containment(&resolved, project_root, "path") {
-            return Some(format!(
-                "Blocked by `clarg`: '{cmd} {flag} \"{}\"' references external path '{}'",
-                truncate(code, 80),
-                path_str
-            ));
-        }
-    }
-    None
-}
-
-/// Check `dd` command: parse key=value arguments and check path values.
-fn check_dd(args: &[String], project_root: &Path) -> Option<String> {
-    let path_keys = ["if", "of"];
-    for arg in args {
-        if let Some((key, value)) = arg.split_once('=') {
-            if path_keys.contains(&key) && looks_like_path(value) {
-                let resolved = resolve_target(value, project_root);
-                if let Some(reason) =
-                    check_path_containment(&resolved, project_root, "path")
-                {
-                    return Some(reason);
-                }
-            }
-        }
-    }
-    None
-}
-
-/// For unknown commands, check all non-flag tokens that look like paths.
-fn check_unknown_cmd(args: &[String], project_root: &Path) -> Option<String> {
-    for arg in args {
-        if arg.starts_with('-') {
-            // Check --flag=value patterns for embedded paths
-            if let Some((_flag, value)) = arg.split_once('=') {
-                if looks_like_path(value) {
-                    let resolved = resolve_target(value, project_root);
-                    if let Some(reason) =
-                        check_path_containment(&resolved, project_root, "path")
-                    {
-                        return Some(reason);
-                    }
-                }
-            }
-            continue;
-        }
-        if looks_like_path(arg) {
-            let resolved = resolve_target(arg, project_root);
-            if let Some(reason) =
-                check_path_containment(&resolved, project_root, "path")
-            {
-                return Some(reason);
-            }
-        }
-    }
-    None
-}
+// ============================================================================
+// Utilities
+// ============================================================================
 
 /// Heuristic: does a token look like a filesystem path?
 pub fn looks_like_path(token: &str) -> bool {
@@ -908,19 +599,4 @@ pub fn looks_like_path(token: &str) -> bool {
         || token.starts_with('.')
         || token.starts_with('~')
         || token.starts_with("$HOME")
-}
-
-fn truncate(s: &str, max: usize) -> &str {
-    if s.len() <= max {
-        s
-    } else {
-        &s[..s.floor_char_boundary(max)]
-    }
-}
-
-/// Extract the core reason from a full "Blocked by `clarg`: ..." message.
-fn extract_core_reason(reason: &str) -> &str {
-    reason
-        .strip_prefix("Blocked by `clarg`: ")
-        .unwrap_or(reason)
 }

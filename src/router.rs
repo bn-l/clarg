@@ -1,12 +1,13 @@
 use eyre::Result;
 use std::path::Path;
 
-use crate::bash_analyzer;
+use crate::bash_analyzer::{self, PathContext};
 use crate::blocked_commands::BlockedCommandsRule;
 use crate::blocked_files::BlockedFilesRule;
 use crate::config::Config;
 use crate::hook_input::HookInput;
 use crate::internalonly::{check_path_containment, resolve_project_root, resolve_target};
+use crate::util::truncate;
 
 #[derive(Debug)]
 pub enum Verdict {
@@ -15,30 +16,28 @@ pub enum Verdict {
 }
 
 pub struct RuleSet {
+    /// Canonicalized project root (when internal_access_only or blocked_files is active).
     project_root: std::path::PathBuf,
-    internalonly: Option<InternalOnlyCtx>,
+    internal_access_only: bool,
     blocked_files: Option<BlockedFilesRule>,
     blocked_commands: Option<BlockedCommandsRule>,
 }
 
-/// Context for internal-only checking: just the resolved project root.
-struct InternalOnlyCtx {
-    project_root: std::path::PathBuf,
-}
-
 impl RuleSet {
     pub fn build(config: &Config, raw_project_root: &Path) -> Result<Self> {
-        let internalonly = if config.internal_access_only {
-            let project_root = resolve_project_root(raw_project_root)?;
-            Some(InternalOnlyCtx { project_root })
+        // Canonicalize the project root when any filesystem rule needs it.
+        let needs_canonical =
+            config.internal_access_only || !config.block_access_to.is_empty();
+        let project_root = if needs_canonical {
+            resolve_project_root(raw_project_root)?
         } else {
-            None
+            raw_project_root.to_path_buf()
         };
 
         let blocked_files = if !config.block_access_to.is_empty() {
             Some(BlockedFilesRule::new(
                 &config.block_access_to,
-                raw_project_root,
+                &project_root,
             )?)
         } else {
             None
@@ -51,8 +50,8 @@ impl RuleSet {
         };
 
         Ok(Self {
-            project_root: raw_project_root.to_path_buf(),
-            internalonly,
+            project_root,
+            internal_access_only: config.internal_access_only,
             blocked_files,
             blocked_commands,
         })
@@ -62,13 +61,28 @@ impl RuleSet {
         let tool_name_lower = input.tool_name.to_ascii_lowercase();
         match tool_name_lower.as_str() {
             "bash" => self.evaluate_bash(input),
-            "read" | "write" | "edit" | "notebookedit" => self.evaluate_file_tool(input),
-            "glob" => self.evaluate_glob(input),
-            "grep" => self.evaluate_grep(input),
-            // Non-filesystem tools — always allow
-            "webfetch" | "websearch" | "task" => Verdict::Allow,
-            // Unknown tools — pass through
-            _ => Verdict::Allow,
+            "read" | "write" | "edit" | "notebookedit" => {
+                let path = input.file_path().or_else(|| input.notebook_path());
+                match path {
+                    Some(p) => self.evaluate_path_tool(p),
+                    None => Verdict::Allow,
+                }
+            }
+            "glob" | "grep" => match input.search_path() {
+                Some(p) => self.evaluate_path_tool(p),
+                None => Verdict::Allow,
+            },
+            // Known non-filesystem tools — always allow
+            "webfetch" | "websearch" | "task" | "askuserquestion"
+            | "todowrite" | "skill" | "sendmessage" | "teamcreate"
+            | "teamdelete" | "enterplanmode" | "exitplanmode"
+            | "taskcreate" | "taskget" | "taskupdate" | "tasklist"
+            | "taskoutput" | "taskstop" => Verdict::Allow,
+            // Unknown tools — deny by default
+            _ => Verdict::Deny(format!(
+                "Blocked by `clarg`: unknown tool '{}' is not in the allowlist",
+                input.tool_name
+            )),
         }
     }
 
@@ -78,24 +92,74 @@ impl RuleSet {
             None => return Verdict::Allow,
         };
 
-        // Check internal-only (path analysis of bash commands)
-        if let Some(ctx) = &self.internalonly {
-            if let Some(reason) =
-                bash_analyzer::analyze(command, &ctx.project_root)
-            {
-                return Verdict::Deny(reason);
+        // Single extraction pass — used by both internal-only and blocked-files checks
+        let paths = bash_analyzer::extract_paths(command);
+
+        // Check internal-only (path containment)
+        if self.internal_access_only {
+            for ep in &paths {
+                match &ep.context {
+                    PathContext::CdImplicitHome => {
+                        return Verdict::Deny(
+                            "Blocked by `clarg`: 'cd' with no arguments would navigate to $HOME, outside the project directory".to_string()
+                        );
+                    }
+                    PathContext::CdDash => {
+                        return Verdict::Deny(
+                            "Blocked by `clarg`: 'cd -' could navigate outside the project directory".to_string()
+                        );
+                    }
+                    PathContext::InlineCodeRef {
+                        interpreter,
+                        flag,
+                        code_snippet,
+                    } => {
+                        let resolved = resolve_target(&ep.raw, &self.project_root);
+                        if check_path_containment(
+                            &resolved,
+                            &self.project_root,
+                            "path",
+                        )
+                        .is_some()
+                        {
+                            return Verdict::Deny(format!(
+                                "Blocked by `clarg`: '{} {} \"{}\"' references external path '{}'",
+                                interpreter,
+                                flag,
+                                truncate(code_snippet, 80),
+                                ep.raw
+                            ));
+                        }
+                    }
+                    _ => {
+                        let resolved =
+                            resolve_target(&ep.raw, &self.project_root);
+                        if let Some(reason) = check_path_containment(
+                            &resolved,
+                            &self.project_root,
+                            ep.context.label(),
+                        ) {
+                            return Verdict::Deny(reason);
+                        }
+                    }
+                }
             }
         }
 
-        // Check blocked files against paths extracted from the command
+        // Check blocked files against extracted paths
         if let Some(rule) = &self.blocked_files {
-            let paths = bash_analyzer::extract_paths(command);
-            for path_str in &paths {
-                // Resolve relative paths against project root
-                let resolved = resolve_target(path_str, &self.project_root);
+            for ep in &paths {
+                // Skip non-path contexts
+                if matches!(
+                    ep.context,
+                    PathContext::CdImplicitHome | PathContext::CdDash
+                ) {
+                    continue;
+                }
+                let resolved =
+                    resolve_target(&ep.raw, &self.project_root);
                 // Only check paths under the project root — the gitignore
-                // matcher requires paths to be under its root, and external
-                // paths can't match project-relative blocked patterns anyway.
+                // matcher requires paths to be under its root.
                 if resolved.starts_with(&self.project_root) {
                     if let Some(reason) = rule.check(&resolved) {
                         return Verdict::Deny(reason);
@@ -114,18 +178,19 @@ impl RuleSet {
         Verdict::Allow
     }
 
-    fn evaluate_file_tool(&self, input: &HookInput) -> Verdict {
-        let file_path = match input.file_path().or_else(|| input.notebook_path()) {
-            Some(p) => p,
-            None => return Verdict::Allow,
-        };
+    /// Evaluate a single-path tool (Read, Write, Edit, NotebookEdit, Glob, Grep).
+    fn evaluate_path_tool(&self, path: &str) -> Verdict {
+        if !self.internal_access_only && self.blocked_files.is_none() {
+            return Verdict::Allow;
+        }
+
+        let resolved = resolve_target(path, &self.project_root);
 
         // Check internal-only
-        if let Some(ctx) = &self.internalonly {
-            let resolved = resolve_target(file_path, &ctx.project_root);
+        if self.internal_access_only {
             if let Some(reason) = check_path_containment(
                 &resolved,
-                &ctx.project_root,
+                &self.project_root,
                 "path",
             ) {
                 return Verdict::Deny(reason);
@@ -134,66 +199,7 @@ impl RuleSet {
 
         // Check blocked files
         if let Some(rule) = &self.blocked_files {
-            let path = std::path::Path::new(file_path);
-            if let Some(reason) = rule.check(path) {
-                return Verdict::Deny(reason);
-            }
-        }
-
-        Verdict::Allow
-    }
-
-    fn evaluate_glob(&self, input: &HookInput) -> Verdict {
-        let search_path = match input.search_path() {
-            Some(p) => p,
-            None => return Verdict::Allow,
-        };
-
-        // Check internal-only
-        if let Some(ctx) = &self.internalonly {
-            let resolved = resolve_target(search_path, &ctx.project_root);
-            if let Some(reason) = check_path_containment(
-                &resolved,
-                &ctx.project_root,
-                "path",
-            ) {
-                return Verdict::Deny(reason);
-            }
-        }
-
-        // Check blocked files
-        if let Some(rule) = &self.blocked_files {
-            let path = std::path::Path::new(search_path);
-            if let Some(reason) = rule.check(path) {
-                return Verdict::Deny(reason);
-            }
-        }
-
-        Verdict::Allow
-    }
-
-    fn evaluate_grep(&self, input: &HookInput) -> Verdict {
-        let search_path = match input.search_path() {
-            Some(p) => p,
-            None => return Verdict::Allow,
-        };
-
-        // Check internal-only
-        if let Some(ctx) = &self.internalonly {
-            let resolved = resolve_target(search_path, &ctx.project_root);
-            if let Some(reason) = check_path_containment(
-                &resolved,
-                &ctx.project_root,
-                "path",
-            ) {
-                return Verdict::Deny(reason);
-            }
-        }
-
-        // Check blocked files
-        if let Some(rule) = &self.blocked_files {
-            let path = std::path::Path::new(search_path);
-            if let Some(reason) = rule.check(path) {
+            if let Some(reason) = rule.check(&resolved) {
                 return Verdict::Deny(reason);
             }
         }

@@ -5,13 +5,7 @@ use std::path::Path;
 
 /// Write the structured deny JSON to stdout and reason to stderr.
 pub fn output_deny(reason: &str) {
-    let json = json!({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": reason
-        }
-    });
+    let json = deny_json(reason);
     println!("{}", json);
     eprintln!("{}", reason);
 }
