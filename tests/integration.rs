@@ -258,7 +258,7 @@ fn test_empty_stdin_fail_closed() {
     assert!(stderr.contains("internal error"));
 }
 
-// --- --help → exit 0 ---
+// --- --help → exit 0 with clap output ---
 
 #[test]
 fn test_help_flag() {
@@ -268,7 +268,111 @@ fn test_help_flag() {
     let output = cmd.output().expect("failed to run --help");
     assert_eq!(output.status.code(), Some(0));
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("PreToolUse hook for Claude Code"));
+    // Check for clap-specific output (Usage/Options), not the friendly usage message
+    assert!(
+        stdout.contains("Usage:"),
+        "should show clap help, not friendly usage. Got: {stdout}"
+    );
+    assert!(
+        stdout.contains("--internal-access-only"),
+        "should list CLI flags. Got: {stdout}"
+    );
+}
+
+// --- -V → exit 0 with version ---
+
+#[test]
+fn test_version_flag() {
+    let mut cmd = clarg_bin();
+    cmd.arg("-V");
+    cmd.stdin(std::process::Stdio::null());
+    let output = cmd.output().expect("failed to run -V");
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("clarg"),
+        "should show version string. Got: {stdout}"
+    );
+    assert!(
+        !stdout.contains("QUICK SETUP"),
+        "should show clap version, not friendly usage. Got: {stdout}"
+    );
+}
+
+// --- PTY tests: --help/-V work even when stdin is a real terminal ---
+
+/// Helper to spawn clarg in a PTY (stdin is a terminal device) and capture output.
+/// Reads from the PTY master in a thread to avoid deadlock — PTYs yield EIO
+/// (not EOF) when the slave side closes, so read_to_string blocks forever.
+fn run_clarg_in_pty(args: &[&str]) -> (i32, String) {
+    use std::io::Read;
+
+    let (pty, pts) = pty_process::blocking::open().expect("failed to open pty");
+    let _ = pty.resize(pty_process::Size::new(24, 80));
+
+    let mut child = pty_process::blocking::Command::new(env!("CARGO_BIN_EXE_clarg"))
+        .args(args)
+        .spawn(pts)
+        .expect("failed to spawn clarg in pty");
+
+    // Read from PTY master in a thread — when the child exits and the slave
+    // fd closes, reads return EIO which we treat as end-of-output.
+    let reader = std::thread::spawn(move || {
+        let mut pty = pty;
+        let mut output = String::new();
+        let mut buf = [0u8; 4096];
+        loop {
+            match pty.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => output.push_str(&String::from_utf8_lossy(&buf[..n])),
+                Err(_) => break,
+            }
+        }
+        output
+    });
+
+    let status = child.wait().expect("failed to wait on child");
+    let output = reader.join().expect("pty reader thread panicked");
+
+    (status.code().unwrap_or(-1), output)
+}
+
+#[test]
+fn test_help_flag_in_tty() {
+    let (code, output) = run_clarg_in_pty(&["--help"]);
+    assert_eq!(code, 0, "--help should exit 0 in TTY");
+    assert!(
+        output.contains("Usage:"),
+        "should show clap help in TTY, not friendly usage. Got: {output}"
+    );
+    assert!(
+        output.contains("--internal-access-only"),
+        "should list CLI flags in TTY. Got: {output}"
+    );
+}
+
+#[test]
+fn test_version_flag_in_tty() {
+    let (code, output) = run_clarg_in_pty(&["-V"]);
+    assert_eq!(code, 0, "-V should exit 0 in TTY");
+    assert!(
+        output.contains("clarg"),
+        "should show version string in TTY. Got: {output}"
+    );
+    assert!(
+        !output.contains("QUICK SETUP"),
+        "should show clap version, not friendly usage. Got: {output}"
+    );
+}
+
+#[test]
+fn test_bare_invocation_in_tty_shows_friendly_usage() {
+    let (code, output) = run_clarg_in_pty(&[]);
+    assert_eq!(code, 0, "bare clarg in TTY should exit 0");
+    assert!(
+        output.contains("QUICK SETUP"),
+        "bare clarg in TTY should show friendly usage. Got: {output}"
+    );
 }
 
 // --- WebFetch / WebSearch always allowed ---
