@@ -16,8 +16,7 @@ fn project_root(hook_input: &HookInput) -> PathBuf {
         .unwrap_or_else(|| hook_input.cwd.clone())
 }
 
-fn run() -> Result<Verdict> {
-    let cli = Cli::parse();
+fn run(cli: Cli) -> Result<Verdict> {
     let config = Config::from_cli(cli)?;
     let log_path = config.log_to.clone();
 
@@ -63,13 +62,16 @@ fn run() -> Result<Verdict> {
 fn main() {
     color_eyre::install().ok();
 
-    // TTY check first — if user ran clarg interactively, show friendly usage
+    // Parse CLI args first so --help/-V work even from a TTY
+    let cli = Cli::parse();
+
+    // TTY check — if user ran clarg interactively with no meaningful args, show friendly usage
     if std::io::stdin().is_terminal() {
         print_friendly_usage();
         std::process::exit(0);
     }
 
-    match run() {
+    match run(cli) {
         Ok(Verdict::Allow) => std::process::exit(0),
         Ok(Verdict::Deny(reason)) => {
             output_deny(&reason);
