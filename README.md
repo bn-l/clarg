@@ -1,6 +1,6 @@
 # clarg
 
-Claude Code `PreToolUse` hook to block risky file access and commands.
+Claude code argument guard. Uses the `PreToolUse` hook to block risky commands, arguments to commands, and/or file access.
 
 ## Install
 
