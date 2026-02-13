@@ -428,10 +428,10 @@ fn test_task_tool_allowed() {
     assert_eq!(code, 0, "Task should always be allowed");
 }
 
-// --- Unknown tool denied by default ---
+// --- Unknown tool allowed by default ---
 
 #[test]
-fn test_unknown_tool_denied() {
+fn test_unknown_tool_allowed() {
     let tmp = tempfile::tempdir().unwrap();
     let canonical = tmp.path().canonicalize().unwrap();
     let cwd = canonical.to_str().unwrap();
@@ -441,11 +441,8 @@ fn test_unknown_tool_denied() {
         serde_json::json!({"anything": "here"}),
         cwd,
     );
-    let (code, stdout, stderr) = run_clarg(&["-i", "-b", ".env"], &input);
-    assert_eq!(code, 2, "unknown tools should be denied");
-    let json: serde_json::Value = serde_json::from_str(&stdout).expect("stdout should be JSON");
-    assert_eq!(json["hookSpecificOutput"]["permissionDecision"], "deny");
-    assert!(stderr.contains("unknown tool"));
+    let (code, _stdout, _stderr) = run_clarg(&["-i", "-b", ".env"], &input);
+    assert_eq!(code, 0, "unknown tools should be allowed");
 }
 
 // --- Multiple blocked file patterns ---

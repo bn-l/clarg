@@ -78,11 +78,8 @@ impl RuleSet {
             | "teamdelete" | "enterplanmode" | "exitplanmode"
             | "taskcreate" | "taskget" | "taskupdate" | "tasklist"
             | "taskoutput" | "taskstop" => Verdict::Allow,
-            // Unknown tools — deny by default
-            _ => Verdict::Deny(format!(
-                "Blocked by `clarg`: unknown tool '{}' is not in the allowlist",
-                input.tool_name
-            )),
+            // Unknown tools — allow by default
+            _ => Verdict::Allow,
         }
     }
 

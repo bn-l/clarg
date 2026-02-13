@@ -217,11 +217,11 @@ fn test_task_allowed_with_internal_only() {
 }
 
 // ============================================================================
-// Unknown tools (denied by default - not in allowlist)
+// Unknown tools (allowed by default)
 // ============================================================================
 
 #[test]
-fn test_unknown_tool_denied_no_rules() {
+fn test_unknown_tool_allowed_no_rules() {
     let tmp = TempDir::new().unwrap();
     let config = Config {
         block_access_to: vec![],
@@ -243,16 +243,13 @@ fn test_unknown_tool_denied_no_rules() {
     let input: HookInput = serde_json::from_value(json).unwrap();
 
     match ruleset.evaluate(&input) {
-        Verdict::Allow => panic!("expected deny - unknown tools are blocked"),
-        Verdict::Deny(reason) => {
-            assert!(reason.contains("unknown tool"));
-            assert!(reason.contains("CustomMcpTool"));
-        }
+        Verdict::Allow => {}
+        Verdict::Deny(reason) => panic!("expected allow for unknown tool, got deny: {reason}"),
     }
 }
 
 #[test]
-fn test_unknown_tool_denied_with_all_rules() {
+fn test_unknown_tool_allowed_with_all_rules() {
     let tmp = TempDir::new().unwrap();
     let config = Config {
         block_access_to: vec![".env".to_string()],
@@ -275,16 +272,13 @@ fn test_unknown_tool_denied_with_all_rules() {
     let input: HookInput = serde_json::from_value(json).unwrap();
 
     match ruleset.evaluate(&input) {
-        Verdict::Allow => panic!("expected deny - unknown tools are blocked"),
-        Verdict::Deny(reason) => {
-            assert!(reason.contains("unknown tool"));
-            assert!(reason.contains("SomeNewTool"));
-        }
+        Verdict::Allow => {}
+        Verdict::Deny(reason) => panic!("expected allow for unknown tool, got deny: {reason}"),
     }
 }
 
 #[test]
-fn test_mcp_tool_denied() {
+fn test_mcp_tool_allowed() {
     let tmp = TempDir::new().unwrap();
     let config = Config {
         block_access_to: vec![],
@@ -306,11 +300,8 @@ fn test_mcp_tool_denied() {
     let input: HookInput = serde_json::from_value(json).unwrap();
 
     match ruleset.evaluate(&input) {
-        Verdict::Allow => panic!("expected deny - MCP tools are unknown to router"),
-        Verdict::Deny(reason) => {
-            assert!(reason.contains("unknown tool"));
-            assert!(reason.contains("mcp__filesystem__read_file"));
-        }
+        Verdict::Allow => {}
+        Verdict::Deny(reason) => panic!("expected allow for MCP tool, got deny: {reason}"),
     }
 }
 
