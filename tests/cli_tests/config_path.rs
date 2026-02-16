@@ -9,7 +9,7 @@ fn test_config_path_positional_simple() {
     assert_eq!(cli.config_path, Some("config.yaml".into()));
     assert!(cli.block_access_to.is_empty());
     assert!(cli.commands_forbidden.is_empty());
-    assert!(cli.log_to.is_none());
+    assert!(cli.log_dir.is_none());
     assert!(!cli.internal_access_only);
 }
 

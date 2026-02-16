@@ -14,7 +14,7 @@ fn test_from_cli_no_flags() {
 
     assert_eq!(config.block_access_to.len(), 0);
     assert_eq!(config.commands_forbidden.len(), 0);
-    assert_eq!(config.log_to, None);
+    assert_eq!(config.log_dir, None);
     assert_eq!(config.internal_access_only, false);
 }
 
@@ -29,7 +29,7 @@ fn test_from_cli_all_flags_populated() {
     assert_eq!(config.commands_forbidden.len(), 2);
     assert_eq!(config.commands_forbidden[0], "rm -rf");
     assert_eq!(config.commands_forbidden[1], "sudo");
-    assert_eq!(config.log_to, Some(PathBuf::from("/tmp/clarg.log")));
+    assert_eq!(config.log_dir, Some(PathBuf::from("/tmp/clarg")));
     assert_eq!(config.internal_access_only, true);
 }
 
@@ -41,7 +41,7 @@ fn test_from_cli_partial_flags() {
     assert_eq!(config.block_access_to.len(), 1);
     assert_eq!(config.block_access_to[0], ".env");
     assert_eq!(config.commands_forbidden.len(), 0);
-    assert_eq!(config.log_to, None);
+    assert_eq!(config.log_dir, None);
     assert_eq!(config.internal_access_only, false);
 }
 
@@ -51,7 +51,7 @@ fn test_from_cli_only_block_access_to() {
         config_path: None,
         block_access_to: vec!["*.pem".to_string(), "*.key".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let config = Config::from_cli(cli).unwrap();
@@ -60,7 +60,7 @@ fn test_from_cli_only_block_access_to() {
     assert_eq!(config.block_access_to[0], "*.pem");
     assert_eq!(config.block_access_to[1], "*.key");
     assert_eq!(config.commands_forbidden.len(), 0);
-    assert_eq!(config.log_to, None);
+    assert_eq!(config.log_dir, None);
     assert_eq!(config.internal_access_only, false);
 }
 
@@ -70,7 +70,7 @@ fn test_from_cli_only_commands_forbidden() {
         config_path: None,
         block_access_to: vec![],
         commands_forbidden: vec!["dd".to_string(), "mkfs".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let config = Config::from_cli(cli).unwrap();
@@ -79,24 +79,24 @@ fn test_from_cli_only_commands_forbidden() {
     assert_eq!(config.commands_forbidden.len(), 2);
     assert_eq!(config.commands_forbidden[0], "dd");
     assert_eq!(config.commands_forbidden[1], "mkfs");
-    assert_eq!(config.log_to, None);
+    assert_eq!(config.log_dir, None);
     assert_eq!(config.internal_access_only, false);
 }
 
 #[test]
-fn test_from_cli_only_log_to() {
+fn test_from_cli_only_log_dir() {
     let cli = Cli {
         config_path: None,
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: Some(PathBuf::from("/var/log/clarg.log")),
+        log_dir: Some(PathBuf::from("/var/log/clarg")),
         internal_access_only: false,
     };
     let config = Config::from_cli(cli).unwrap();
 
     assert_eq!(config.block_access_to.len(), 0);
     assert_eq!(config.commands_forbidden.len(), 0);
-    assert_eq!(config.log_to, Some(PathBuf::from("/var/log/clarg.log")));
+    assert_eq!(config.log_dir, Some(PathBuf::from("/var/log/clarg")));
     assert_eq!(config.internal_access_only, false);
 }
 
@@ -106,14 +106,14 @@ fn test_from_cli_only_internal_access_only() {
         config_path: None,
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let config = Config::from_cli(cli).unwrap();
 
     assert_eq!(config.block_access_to.len(), 0);
     assert_eq!(config.commands_forbidden.len(), 0);
-    assert_eq!(config.log_to, None);
+    assert_eq!(config.log_dir, None);
     assert_eq!(config.internal_access_only, true);
 }
 
@@ -125,7 +125,7 @@ block_access_to:
   - "*.secret"
 commands_forbidden:
   - "rm -rf"
-log_to: "/tmp/clarg.log"
+log_dir: "/tmp/clarg"
 internal_access_only: true
 "#;
     let file = create_yaml_file(yaml);
@@ -133,7 +133,7 @@ internal_access_only: true
         config_path: Some(file.path().to_path_buf()),
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let config = Config::from_cli(cli).unwrap();
@@ -143,7 +143,7 @@ internal_access_only: true
     assert_eq!(config.block_access_to[1], "*.secret");
     assert_eq!(config.commands_forbidden.len(), 1);
     assert_eq!(config.commands_forbidden[0], "rm -rf");
-    assert_eq!(config.log_to, Some(PathBuf::from("/tmp/clarg.log")));
+    assert_eq!(config.log_dir, Some(PathBuf::from("/tmp/clarg")));
     assert_eq!(config.internal_access_only, true);
 }
 

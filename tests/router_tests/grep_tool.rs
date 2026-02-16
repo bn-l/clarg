@@ -42,7 +42,7 @@ fn test_grep_no_rules_allows_anything() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -64,7 +64,7 @@ fn test_grep_internal_only_blocks_external_path() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -85,7 +85,7 @@ fn test_grep_internal_only_allows_internal_path() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -104,7 +104,7 @@ fn test_grep_internal_only_blocks_home_var() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -123,7 +123,7 @@ fn test_grep_internal_only_blocks_parent_traversal() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -147,7 +147,7 @@ fn test_grep_blocked_files_denies_blocked_path() {
     let config = Config {
         block_access_to: vec![".secret".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -169,7 +169,7 @@ fn test_grep_blocked_files_allows_non_blocked_path() {
     let config = Config {
         block_access_to: vec![".secret".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -192,7 +192,7 @@ fn test_grep_internal_checked_before_blocked_files() {
     let config = Config {
         block_access_to: vec!["config/".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -218,7 +218,7 @@ fn test_grep_missing_path_allowed() {
     let config = Config {
         block_access_to: vec!["*.secret".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -250,7 +250,7 @@ fn test_grep_relative_path_inside_allowed() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -268,7 +268,7 @@ fn test_grep_relative_parent_traversal_blocked() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -291,7 +291,7 @@ fn test_grep_absolute_internal_path_allowed() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();

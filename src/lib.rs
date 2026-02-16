@@ -5,6 +5,7 @@ pub mod cli;
 pub mod config;
 pub mod hook_input;
 pub mod internalonly;
+pub mod logging;
 pub mod output;
 pub mod router;
 pub mod util;

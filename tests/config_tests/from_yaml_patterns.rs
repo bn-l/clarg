@@ -105,12 +105,12 @@ commands_forbidden:
 #[test]
 fn test_from_yaml_unicode_log_path() {
     let yaml = r#"
-log_to: "/tmp/логи/clarg.log"
+log_dir: "/tmp/логи/clarg.log"
 "#;
     let file = create_yaml_file(yaml);
     let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
 
-    assert_eq!(config.log_to, Some(PathBuf::from("/tmp/логи/clarg.log")));
+    assert_eq!(config.log_dir, Some(PathBuf::from("/tmp/логи/clarg.log")));
 }
 
 // ============================================================================
@@ -247,70 +247,70 @@ block_access_to:
 // ============================================================================
 
 #[test]
-fn test_from_yaml_log_to_relative_path() {
+fn test_from_yaml_log_dir_relative_path() {
     let yaml = r#"
-log_to: "logs/clarg.log"
+log_dir: "logs/clarg.log"
 "#;
     let file = create_yaml_file(yaml);
     let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
 
-    assert_eq!(config.log_to, Some(PathBuf::from("logs/clarg.log")));
+    assert_eq!(config.log_dir, Some(PathBuf::from("logs/clarg.log")));
 }
 
 #[test]
-fn test_from_yaml_log_to_absolute_path() {
+fn test_from_yaml_log_dir_absolute_path() {
     let yaml = r#"
-log_to: "/var/log/clarg.log"
+log_dir: "/var/log/clarg.log"
 "#;
     let file = create_yaml_file(yaml);
     let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
 
-    assert_eq!(config.log_to, Some(PathBuf::from("/var/log/clarg.log")));
+    assert_eq!(config.log_dir, Some(PathBuf::from("/var/log/clarg.log")));
 }
 
 #[test]
-fn test_from_yaml_log_to_home_directory() {
+fn test_from_yaml_log_dir_home_directory() {
     let yaml = r#"
-log_to: "~/logs/clarg.log"
+log_dir: "~/logs/clarg.log"
 "#;
     let file = create_yaml_file(yaml);
     let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
 
-    assert_eq!(config.log_to, Some(PathBuf::from("~/logs/clarg.log")));
+    assert_eq!(config.log_dir, Some(PathBuf::from("~/logs/clarg.log")));
 }
 
 #[test]
-fn test_from_yaml_log_to_current_directory() {
+fn test_from_yaml_log_dir_current_directory() {
     let yaml = r#"
-log_to: "./clarg.log"
+log_dir: "./clarg.log"
 "#;
     let file = create_yaml_file(yaml);
     let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
 
-    assert_eq!(config.log_to, Some(PathBuf::from("./clarg.log")));
+    assert_eq!(config.log_dir, Some(PathBuf::from("./clarg.log")));
 }
 
 #[test]
-fn test_from_yaml_log_to_parent_directory() {
+fn test_from_yaml_log_dir_parent_directory() {
     let yaml = r#"
-log_to: "../logs/clarg.log"
+log_dir: "../logs/clarg.log"
 "#;
     let file = create_yaml_file(yaml);
     let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
 
-    assert_eq!(config.log_to, Some(PathBuf::from("../logs/clarg.log")));
+    assert_eq!(config.log_dir, Some(PathBuf::from("../logs/clarg.log")));
 }
 
 #[test]
-fn test_from_yaml_log_to_with_spaces() {
+fn test_from_yaml_log_dir_with_spaces() {
     let yaml = r#"
-log_to: "/path with spaces/clarg.log"
+log_dir: "/path with spaces/clarg.log"
 "#;
     let file = create_yaml_file(yaml);
     let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
 
     assert_eq!(
-        config.log_to,
+        config.log_dir,
         Some(PathBuf::from("/path with spaces/clarg.log"))
     );
 }

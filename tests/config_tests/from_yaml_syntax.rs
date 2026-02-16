@@ -16,7 +16,7 @@ block_access_to:
 # Another comment
 commands_forbidden:
   - "rm -rf"  # Dangerous command
-log_to: "/tmp/clarg.log"  # Log path
+log_dir: "/tmp/clarg.log"  # Log path
 internal_access_only: true  # Restrict access
 "#;
     let file = create_yaml_file(yaml);
@@ -27,7 +27,7 @@ internal_access_only: true  # Restrict access
     assert_eq!(config.block_access_to[1], "*.secret");
     assert_eq!(config.commands_forbidden.len(), 1);
     assert_eq!(config.commands_forbidden[0], "rm -rf");
-    assert_eq!(config.log_to, Some(PathBuf::from("/tmp/clarg.log")));
+    assert_eq!(config.log_dir, Some(PathBuf::from("/tmp/clarg.log")));
     assert_eq!(config.internal_access_only, true);
 }
 
@@ -44,7 +44,7 @@ fn test_from_yaml_with_only_comments() {
 
     assert_eq!(config.block_access_to.len(), 0);
     assert_eq!(config.commands_forbidden.len(), 0);
-    assert_eq!(config.log_to, None);
+    assert_eq!(config.log_dir, None);
     assert_eq!(config.internal_access_only, false);
 }
 
@@ -60,7 +60,7 @@ block_access_to:
   - "*.secret"
 commands_forbidden:
   - "rm -rf"
-log_to: "/tmp/clarg.log"
+log_dir: "/tmp/clarg.log"
 internal_access_only: true
 "#;
     let file = create_yaml_file(yaml);
@@ -80,7 +80,7 @@ block_access_to:
   - '*.secret'
 commands_forbidden:
   - 'rm -rf'
-log_to: '/tmp/clarg.log'
+log_dir: '/tmp/clarg.log'
 "#;
     let file = create_yaml_file(yaml);
     let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
@@ -89,7 +89,7 @@ log_to: '/tmp/clarg.log'
     assert_eq!(config.block_access_to[0], ".env");
     assert_eq!(config.block_access_to[1], "*.secret");
     assert_eq!(config.commands_forbidden[0], "rm -rf");
-    assert_eq!(config.log_to, Some(PathBuf::from("/tmp/clarg.log")));
+    assert_eq!(config.log_dir, Some(PathBuf::from("/tmp/clarg.log")));
 }
 
 #[test]
@@ -325,7 +325,7 @@ commands_forbidden: ["rm -rf", "sudo"]
 
 #[test]
 fn test_from_yaml_flow_style_complete() {
-    let yaml = r#"{block_access_to: [".env"], commands_forbidden: ["rm"], log_to: "/tmp/log", internal_access_only: true}"#;
+    let yaml = r#"{block_access_to: [".env"], commands_forbidden: ["rm"], log_dir: "/tmp/log", internal_access_only: true}"#;
     let file = create_yaml_file(yaml);
     let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
 
@@ -333,7 +333,7 @@ fn test_from_yaml_flow_style_complete() {
     assert_eq!(config.block_access_to[0], ".env");
     assert_eq!(config.commands_forbidden.len(), 1);
     assert_eq!(config.commands_forbidden[0], "rm");
-    assert_eq!(config.log_to, Some(PathBuf::from("/tmp/log")));
+    assert_eq!(config.log_dir, Some(PathBuf::from("/tmp/log")));
     assert_eq!(config.internal_access_only, true);
 }
 

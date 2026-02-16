@@ -28,7 +28,7 @@ fn test_bash_no_rules_allows_anything() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -50,7 +50,7 @@ fn test_bash_blocked_command_denied() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec!["rm -rf".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -70,7 +70,7 @@ fn test_bash_non_blocked_command_allowed() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec!["rm -rf".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -92,7 +92,7 @@ fn test_bash_internal_only_blocks_external_path() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -112,7 +112,7 @@ fn test_bash_internal_only_allows_internal_path() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -130,7 +130,7 @@ fn test_bash_internal_only_blocks_cd_outside() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -148,7 +148,7 @@ fn test_bash_internal_only_blocks_redirect_outside() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -170,7 +170,7 @@ fn test_bash_internal_only_checked_before_blocked_commands() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec!["dangerous".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -192,7 +192,7 @@ fn test_bash_blocked_command_after_internal_check_passes() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec!["dangerous".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -217,7 +217,7 @@ fn test_bash_missing_command_allowed() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec!["rm".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -247,7 +247,7 @@ fn test_bash_piped_command_with_external_path_blocked() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -265,7 +265,7 @@ fn test_bash_chained_command_with_external_blocked() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -283,7 +283,7 @@ fn test_bash_eval_with_external_path_blocked() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -306,7 +306,7 @@ fn test_bash_blocked_files_cat_env_denied() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -326,7 +326,7 @@ fn test_bash_blocked_files_non_match_allowed() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -344,7 +344,7 @@ fn test_bash_blocked_files_wildcard_pattern() {
     let config = Config {
         block_access_to: vec!["*.secret".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -364,7 +364,7 @@ fn test_bash_blocked_files_redirect_to_env() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -384,7 +384,7 @@ fn test_bash_blocked_files_piped_command() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -404,7 +404,7 @@ fn test_bash_blocked_files_sed_on_env() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -424,7 +424,7 @@ fn test_bash_blocked_files_curl_upload() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();

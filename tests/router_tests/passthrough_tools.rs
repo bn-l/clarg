@@ -14,7 +14,7 @@ fn test_webfetch_always_allowed_no_rules() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -42,7 +42,7 @@ fn test_webfetch_allowed_with_internal_only() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -70,7 +70,7 @@ fn test_webfetch_allowed_with_all_rules() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec!["curl".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -102,7 +102,7 @@ fn test_websearch_always_allowed_no_rules() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -130,7 +130,7 @@ fn test_websearch_allowed_with_internal_only() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -162,7 +162,7 @@ fn test_task_always_allowed_no_rules() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -192,7 +192,7 @@ fn test_task_allowed_with_internal_only() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -226,7 +226,7 @@ fn test_unknown_tool_allowed_no_rules() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -254,7 +254,7 @@ fn test_unknown_tool_allowed_with_all_rules() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec!["rm".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -283,7 +283,7 @@ fn test_mcp_tool_allowed() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -315,7 +315,7 @@ fn test_webfetch_empty_input_allowed() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -341,7 +341,7 @@ fn test_task_empty_input_allowed() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -371,7 +371,7 @@ fn test_bash_lowercase_routed_correctly() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec!["rm -rf".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -399,7 +399,7 @@ fn test_bash_uppercase_routed_correctly() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec!["rm -rf".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -427,7 +427,7 @@ fn test_read_mixed_case_routed_correctly() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -453,7 +453,7 @@ fn test_glob_case_insensitive_routing() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -479,7 +479,7 @@ fn test_grep_lowercase_routed_correctly() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();

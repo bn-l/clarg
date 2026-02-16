@@ -52,8 +52,8 @@ fn test_config_path_conflicts_with_l() {
 }
 
 #[test]
-fn test_config_path_conflicts_with_log_to() {
-    let args = vec!["clarg", "config.yaml", "--log-to", "/tmp/log.txt"];
+fn test_config_path_conflicts_with_log_dir() {
+    let args = vec!["clarg", "config.yaml", "--log-dir", "/tmp/log.txt"];
     let result = Cli::try_parse_from(args);
 
     assert!(result.is_err());
@@ -105,7 +105,7 @@ fn test_config_path_conflicts_with_multiple_flags_long_form() {
         "config.yaml",
         "--block-access-to", ".env",
         "--commands-forbidden", "rm",
-        "--log-to", "/tmp/log.txt",
+        "--log-dir", "/tmp/log.txt",
         "--internal-access-only"
     ];
     let result = Cli::try_parse_from(args);

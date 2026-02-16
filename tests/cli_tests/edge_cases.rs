@@ -190,7 +190,7 @@ fn test_log_path_unicode() {
     let args = vec!["clarg", "-l", "/tmp/日志/клагー/log™.txt"];
     let cli = Cli::try_parse_from(args).unwrap();
 
-    assert_eq!(cli.log_to, Some("/tmp/日志/клагー/log™.txt".into()));
+    assert_eq!(cli.log_dir, Some("/tmp/日志/клагー/log™.txt".into()));
 }
 
 // ============================================================================
@@ -324,8 +324,8 @@ fn test_commands_forbidden_missing_value() {
 }
 
 #[test]
-fn test_log_to_missing_value() {
-    let args = vec!["clarg", "--log-to"];
+fn test_log_dir_missing_value() {
+    let args = vec!["clarg", "--log-dir"];
     let result = Cli::try_parse_from(args);
 
     assert!(result.is_err());
@@ -504,7 +504,7 @@ fn test_very_long_log_path() {
     let args = vec!["clarg", "-l", &long_path];
     let cli = Cli::try_parse_from(args).unwrap();
 
-    assert_eq!(cli.log_to, Some(long_path.into()));
+    assert_eq!(cli.log_dir, Some(long_path.into()));
 }
 
 // ============================================================================

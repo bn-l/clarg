@@ -12,7 +12,7 @@ fn test_config_default_trait() {
 
     assert_eq!(config.block_access_to.len(), 0);
     assert_eq!(config.commands_forbidden.len(), 0);
-    assert_eq!(config.log_to, None);
+    assert_eq!(config.log_dir, None);
     assert_eq!(config.internal_access_only, false);
 }
 
@@ -157,14 +157,14 @@ block_access_to: [".env",
 }
 
 #[test]
-fn test_from_yaml_log_to_empty_string() {
+fn test_from_yaml_log_dir_empty_string() {
     let yaml = r#"
-log_to: ""
+log_dir: ""
 "#;
     let file = create_yaml_file(yaml);
     let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
 
-    assert_eq!(config.log_to, Some(PathBuf::from("")));
+    assert_eq!(config.log_dir, Some(PathBuf::from("")));
 }
 
 #[test]
@@ -315,14 +315,14 @@ fn test_from_yaml_extremely_nested_flow_style() {
 fn test_from_yaml_compact_format() {
     let yaml = r#"block_access_to: [".env"]
 commands_forbidden: ["rm"]
-log_to: "/tmp/log"
+log_dir: "/tmp/log"
 internal_access_only: true"#;
     let file = create_yaml_file(yaml);
     let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
 
     assert_eq!(config.block_access_to.len(), 1);
     assert_eq!(config.commands_forbidden.len(), 1);
-    assert_eq!(config.log_to, Some(PathBuf::from("/tmp/log")));
+    assert_eq!(config.log_dir, Some(PathBuf::from("/tmp/log")));
     assert_eq!(config.internal_access_only, true);
 }
 

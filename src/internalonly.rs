@@ -62,7 +62,9 @@ pub fn resolve_target(path_str: &str, project_root: &Path) -> PathBuf {
     } else {
         project_root.join(expanded)
     };
-    normalize_path(&absolute)
+    let result = normalize_path(&absolute);
+    log::debug!("resolve_target: '{}' -> '{}'", path_str, result.display());
+    result
 }
 
 /// Check if a resolved path is inside the project root.
@@ -73,8 +75,18 @@ pub fn check_path_containment(
     context: &str,
 ) -> Option<String> {
     if target.starts_with(project_root) {
+        log::debug!(
+            "containment: '{}' is inside root '{}'",
+            target.display(),
+            project_root.display()
+        );
         None
     } else {
+        log::debug!(
+            "containment: '{}' is OUTSIDE root '{}'",
+            target.display(),
+            project_root.display()
+        );
         Some(format!(
             "Blocked by `clarg`: {} '{}' is outside the project directory '{}'",
             context,

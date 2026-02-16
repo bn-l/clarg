@@ -15,7 +15,7 @@ pub fn create_cli_no_flags() -> Cli {
         config_path: None,
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     }
 }
@@ -25,7 +25,7 @@ pub fn create_cli_all_flags() -> Cli {
         config_path: None,
         block_access_to: vec![".env".to_string(), "*.secret".to_string()],
         commands_forbidden: vec!["rm -rf".to_string(), "sudo".to_string()],
-        log_to: Some(PathBuf::from("/tmp/clarg.log")),
+        log_dir: Some(PathBuf::from("/tmp/clarg")),
         internal_access_only: true,
     }
 }
@@ -35,7 +35,7 @@ pub fn create_cli_partial_flags() -> Cli {
         config_path: None,
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     }
 }

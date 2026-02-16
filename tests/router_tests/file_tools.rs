@@ -28,7 +28,7 @@ fn test_read_no_rules_allows_anything() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -46,7 +46,7 @@ fn test_read_internal_only_blocks_external() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -67,7 +67,7 @@ fn test_read_internal_only_allows_internal() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -87,7 +87,7 @@ fn test_read_blocked_files_denies_match() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -109,7 +109,7 @@ fn test_read_blocked_files_allows_non_match() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -132,7 +132,7 @@ fn test_write_internal_only_blocks_external() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -151,7 +151,7 @@ fn test_write_internal_only_allows_internal() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -171,7 +171,7 @@ fn test_write_blocked_files_denies_match() {
     let config = Config {
         block_access_to: vec!["*.secret".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -196,7 +196,7 @@ fn test_edit_internal_only_blocks_external() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -215,7 +215,7 @@ fn test_edit_internal_only_allows_internal() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -235,7 +235,7 @@ fn test_edit_blocked_files_denies_match() {
     let config = Config {
         block_access_to: vec![".env*".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -258,7 +258,7 @@ fn test_file_tool_missing_file_path_allowed() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -288,7 +288,7 @@ fn test_file_tool_internal_only_checked_before_blocked_files() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -315,7 +315,7 @@ fn test_read_parent_traversal_blocked() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -334,7 +334,7 @@ fn test_write_tilde_expansion_blocked() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -371,7 +371,7 @@ fn test_notebookedit_internal_only_blocks_external() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -392,7 +392,7 @@ fn test_notebookedit_internal_only_allows_internal() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -412,7 +412,7 @@ fn test_notebookedit_blocked_files_denies_match() {
     let config = Config {
         block_access_to: vec!["*.ipynb".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -433,7 +433,7 @@ fn test_notebookedit_no_rules_allows() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -451,7 +451,7 @@ fn test_notebookedit_case_insensitive_routing() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();

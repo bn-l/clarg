@@ -16,7 +16,7 @@ use std::path::PathBuf;
 )]
 pub struct Cli {
     /// YAML config path — mutually exclusive with all flags
-    #[arg(conflicts_with_all = ["block_access_to", "commands_forbidden", "log_to", "internal_access_only"])]
+    #[arg(conflicts_with_all = ["block_access_to", "commands_forbidden", "log_dir", "internal_access_only"])]
     pub config_path: Option<PathBuf>,
 
     /// Gitignore-style file patterns to block (comma or space separated)
@@ -27,9 +27,9 @@ pub struct Cli {
     #[arg(short = 'c', long = "commands-forbidden", value_delimiter = ',', num_args = 1..)]
     pub commands_forbidden: Vec<String>,
 
-    /// Path of file to log to (default: stderr)
-    #[arg(short = 'l', long = "log-to")]
-    pub log_to: Option<PathBuf>,
+    /// Directory to write logs to (default: $XDG_STATE_HOME/clarg or ~/.local/state/clarg)
+    #[arg(short = 'l', long = "log-dir")]
+    pub log_dir: Option<PathBuf>,
 
     /// Block ALL filesystem access outside the project directory
     #[arg(short = 'i', long = "internal-access-only")]

@@ -41,7 +41,7 @@ fn test_bash_internalonly_before_blocked_commands_external() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec!["cat".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -69,7 +69,7 @@ fn test_bash_blocked_commands_triggers_when_internal() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec!["dangerous".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -95,7 +95,7 @@ fn test_bash_both_rules_pass_allows() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec!["rm -rf".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -118,7 +118,7 @@ fn test_file_internalonly_before_blocked_files() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -145,7 +145,7 @@ fn test_file_blocked_files_triggers_when_internal() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -173,7 +173,7 @@ fn test_file_both_rules_pass_allows() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -197,7 +197,7 @@ fn test_only_internalonly_blocks_external() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -216,7 +216,7 @@ fn test_only_internalonly_allows_internal() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: true,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -240,7 +240,7 @@ fn test_only_blocked_files_allows_non_matching_internal() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -261,7 +261,7 @@ fn test_only_blocked_files_blocks_matching_pattern() {
     let config = Config {
         block_access_to: vec![".env".to_string()],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
@@ -286,7 +286,7 @@ fn test_only_blocked_commands_allows_external_paths_in_bash() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec!["rm -rf".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -305,7 +305,7 @@ fn test_only_blocked_commands_blocks_matching_pattern() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec!["rm -rf".to_string()],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -329,7 +329,7 @@ fn test_no_rules_allows_everything_bash() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
@@ -347,7 +347,7 @@ fn test_no_rules_allows_everything_read() {
     let config = Config {
         block_access_to: vec![],
         commands_forbidden: vec![],
-        log_to: None,
+        log_dir: None,
         internal_access_only: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();

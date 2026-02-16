@@ -566,19 +566,19 @@ fn test_claude_project_dir_override() {
     );
 }
 
-// --- Log to file ---
+// --- Log to directory ---
 
 #[test]
-fn test_log_to_file() {
+fn test_log_dir_file() {
     let tmp = tempfile::tempdir().unwrap();
-    let log_path = tmp.path().join("clarg.log");
     let input = hook_json("Bash", serde_json::json!({"command": "ls -la"}));
     let (code, _, _) = run_clarg(
-        &["-l", log_path.to_str().unwrap()],
+        &["-l", tmp.path().to_str().unwrap()],
         &input,
     );
     assert_eq!(code, 0);
+    let log_path = tmp.path().join("clarg.log");
     let log_contents = std::fs::read_to_string(&log_path).unwrap();
-    assert!(log_contents.contains("tool=Bash"));
-    assert!(log_contents.contains("verdict=allow"));
+    assert!(log_contents.contains("tool=Bash"), "log should contain tool name, got: {log_contents}");
+    assert!(log_contents.contains("ALLOW"), "log should contain ALLOW verdict, got: {log_contents}");
 }

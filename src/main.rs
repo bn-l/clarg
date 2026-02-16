@@ -1,5 +1,6 @@
 use std::io::{IsTerminal, Read};
 use std::path::PathBuf;
+use std::process::ExitCode;
 
 use clap::Parser;
 use eyre::{Result, WrapErr, bail};
@@ -7,7 +8,8 @@ use eyre::{Result, WrapErr, bail};
 use clarg::cli::Cli;
 use clarg::config::Config;
 use clarg::hook_input::HookInput;
-use clarg::output::{format_log_entry, log_message, output_deny, print_friendly_usage};
+use clarg::logging;
+use clarg::output::{output_deny, print_friendly_usage};
 use clarg::router::{RuleSet, Verdict};
 
 fn project_root(hook_input: &HookInput) -> PathBuf {
@@ -18,7 +20,13 @@ fn project_root(hook_input: &HookInput) -> PathBuf {
 
 fn run(cli: Cli) -> Result<Verdict> {
     let config = Config::from_cli(cli)?;
-    let log_path = config.log_to.clone();
+
+    log::info!(
+        "rules: {} blocked file patterns, {} blocked command patterns, internal_only={}",
+        config.block_access_to.len(),
+        config.commands_forbidden.len(),
+        config.internal_access_only,
+    );
 
     // Read stdin
     let mut input_str = String::new();
@@ -30,11 +38,20 @@ fn run(cli: Cli) -> Result<Verdict> {
         bail!("empty stdin — expected JSON hook input");
     }
 
+    log::debug!("received {} bytes of hook input", input_str.len());
+
     // Parse JSON — fail closed on parse error
     let hook_input: HookInput = serde_json::from_str(&input_str)
         .wrap_err("failed to parse hook input JSON")?;
 
+    log::info!(
+        "hook: tool={} cwd={}",
+        hook_input.tool_name,
+        hook_input.cwd.display(),
+    );
+
     let root = project_root(&hook_input);
+    log::debug!("project root: {}", root.display());
 
     // Build rule set
     let ruleset = RuleSet::build(&config, &root)
@@ -43,23 +60,19 @@ fn run(cli: Cli) -> Result<Verdict> {
     // Evaluate
     let verdict = ruleset.evaluate(&hook_input);
 
-    // Log
     match &verdict {
         Verdict::Allow => {
-            let entry = format_log_entry(&hook_input.tool_name, "allow", "");
-            log_message(log_path.as_deref(), &entry);
+            log::info!("verdict: tool={} ALLOW", hook_input.tool_name);
         }
         Verdict::Deny(reason) => {
-            let entry =
-                format_log_entry(&hook_input.tool_name, "deny", reason);
-            log_message(log_path.as_deref(), &entry);
+            log::warn!("verdict: tool={} DENY reason={}", hook_input.tool_name, reason);
         }
     }
 
     Ok(verdict)
 }
 
-fn main() {
+fn main() -> ExitCode {
     color_eyre::install().ok();
 
     // Parse CLI args first so --help/-V work even from a TTY
@@ -68,23 +81,27 @@ fn main() {
     // TTY check — if user ran clarg interactively with no meaningful args, show friendly usage
     if std::io::stdin().is_terminal() {
         print_friendly_usage();
-        std::process::exit(0);
+        return ExitCode::SUCCESS;
     }
 
+    // Initialize logging (must happen before run() so config loading is logged)
+    let _logger = logging::init(cli.log_dir.as_deref());
+
     match run(cli) {
-        Ok(Verdict::Allow) => std::process::exit(0),
+        Ok(Verdict::Allow) => ExitCode::SUCCESS,
         Ok(Verdict::Deny(reason)) => {
             output_deny(&reason);
-            std::process::exit(2);
+            ExitCode::from(2)
         }
         Err(e) => {
+            log::error!("internal error: {e:#}");
             // Fail closed: any internal error blocks the operation
             let reason = format!(
                 "Blocked by `clarg`: internal error — {e:#}. \
                  Failing closed for safety. Fix the clarg configuration to resolve this."
             );
             output_deny(&reason);
-            std::process::exit(2);
+            ExitCode::from(2)
         }
     }
 }

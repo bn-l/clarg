@@ -10,6 +10,7 @@ impl BlockedFilesRule {
     pub fn new(patterns: &[String], project_root: &Path) -> Result<Self> {
         let mut builder = GitignoreBuilder::new(project_root);
         for pattern in patterns {
+            log::debug!("blocked_files: adding pattern '{}'", pattern);
             builder
                 .add_line(None, pattern)
                 .wrap_err_with(|| format!("invalid gitignore pattern: {pattern}"))?;
@@ -29,12 +30,18 @@ impl BlockedFilesRule {
                 .inner()
                 .map(|g| g.original().to_string())
                 .unwrap_or_else(|| "<unknown pattern>".to_string());
+            log::info!(
+                "blocked_files: '{}' matched pattern '{}'",
+                path.display(),
+                pattern_str
+            );
             Some(format!(
                 "Blocked by `clarg`: access to '{}' is forbidden because it matched the pattern '{}'",
                 path.display(),
                 pattern_str
             ))
         } else {
+            log::debug!("blocked_files: '{}' not matched", path.display());
             None
         }
     }

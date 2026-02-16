@@ -12,6 +12,7 @@ impl BlockedCommandsRule {
         let compiled: Result<Vec<_>> = patterns
             .iter()
             .map(|p| {
+                log::debug!("blocked_commands: compiling regex '{}'", p);
                 Regex::new(p)
                     .map(|r| (r, p.clone()))
                     .wrap_err_with(|| format!("invalid command regex: {p}"))
@@ -24,8 +25,13 @@ impl BlockedCommandsRule {
 
     /// Check if a command is blocked. Returns Some(reason) if blocked, None if allowed.
     pub fn check(&self, command: &str) -> Option<String> {
+        log::debug!(
+            "blocked_commands: checking command against {} patterns",
+            self.patterns.len()
+        );
         for (regex, original) in &self.patterns {
             if regex.is_match(command) {
+                log::info!("blocked_commands: matched pattern '{}'", original);
                 return Some(format!(
                     "Blocked by `clarg`: command '{}' is forbidden because it matched the pattern '{}'",
                     truncate(command, 100),
@@ -33,6 +39,7 @@ impl BlockedCommandsRule {
                 ));
             }
         }
+        log::debug!("blocked_commands: no patterns matched");
         None
     }
 }

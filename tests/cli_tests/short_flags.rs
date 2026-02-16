@@ -12,7 +12,7 @@ fn test_short_flag_b_single_pattern() {
 
     assert_eq!(cli.block_access_to, vec![".env"]);
     assert!(cli.commands_forbidden.is_empty());
-    assert!(cli.log_to.is_none());
+    assert!(cli.log_dir.is_none());
     assert!(!cli.internal_access_only);
 }
 
@@ -199,7 +199,7 @@ fn test_short_flag_l_simple_path() {
     let args = vec!["clarg", "-l", "/tmp/clarg.log"];
     let cli = Cli::try_parse_from(args).unwrap();
 
-    assert_eq!(cli.log_to, Some("/tmp/clarg.log".into()));
+    assert_eq!(cli.log_dir, Some("/tmp/clarg.log".into()));
 }
 
 #[test]
@@ -207,7 +207,7 @@ fn test_short_flag_l_relative_path() {
     let args = vec!["clarg", "-l", "logs/output.log"];
     let cli = Cli::try_parse_from(args).unwrap();
 
-    assert_eq!(cli.log_to, Some("logs/output.log".into()));
+    assert_eq!(cli.log_dir, Some("logs/output.log".into()));
 }
 
 #[test]
@@ -215,7 +215,7 @@ fn test_short_flag_l_path_with_spaces() {
     let args = vec!["clarg", "-l", "my logs/output.log"];
     let cli = Cli::try_parse_from(args).unwrap();
 
-    assert_eq!(cli.log_to, Some("my logs/output.log".into()));
+    assert_eq!(cli.log_dir, Some("my logs/output.log".into()));
 }
 
 #[test]
@@ -223,7 +223,7 @@ fn test_short_flag_l_path_with_tilde() {
     let args = vec!["clarg", "-l", "~/.config/clarg/log.txt"];
     let cli = Cli::try_parse_from(args).unwrap();
 
-    assert_eq!(cli.log_to, Some("~/.config/clarg/log.txt".into()));
+    assert_eq!(cli.log_dir, Some("~/.config/clarg/log.txt".into()));
 }
 
 #[test]
@@ -232,7 +232,7 @@ fn test_short_flag_l_very_long_path() {
     let args = vec!["clarg", "-l", long_path];
     let cli = Cli::try_parse_from(args).unwrap();
 
-    assert_eq!(cli.log_to, Some(long_path.into()));
+    assert_eq!(cli.log_dir, Some(long_path.into()));
 }
 
 // ============================================================================
@@ -247,7 +247,7 @@ fn test_short_flag_i_alone() {
     assert!(cli.internal_access_only);
     assert!(cli.block_access_to.is_empty());
     assert!(cli.commands_forbidden.is_empty());
-    assert!(cli.log_to.is_none());
+    assert!(cli.log_dir.is_none());
 }
 
 #[test]

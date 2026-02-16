@@ -9,7 +9,7 @@ use crate::cli::Cli;
 pub struct Config {
     pub block_access_to: Vec<String>,
     pub commands_forbidden: Vec<String>,
-    pub log_to: Option<PathBuf>,
+    pub log_dir: Option<PathBuf>,
     pub internal_access_only: bool,
 }
 
@@ -21,7 +21,7 @@ struct YamlConfig {
     #[serde(default)]
     commands_forbidden: Vec<String>,
     #[serde(default)]
-    log_to: Option<PathBuf>,
+    log_dir: Option<PathBuf>,
     #[serde(default)]
     internal_access_only: bool,
 }
@@ -29,12 +29,15 @@ struct YamlConfig {
 impl Config {
     pub fn from_cli(cli: Cli) -> Result<Self> {
         if let Some(config_path) = cli.config_path {
-            Self::from_yaml(&config_path)
+            let config = Self::from_yaml(&config_path)?;
+            log::info!("config loaded from YAML: {}", config_path.display());
+            Ok(config)
         } else {
+            log::info!("config loaded from CLI flags");
             Ok(Self {
                 block_access_to: cli.block_access_to,
                 commands_forbidden: cli.commands_forbidden,
-                log_to: cli.log_to,
+                log_dir: cli.log_dir,
                 internal_access_only: cli.internal_access_only,
             })
         }
@@ -48,7 +51,7 @@ impl Config {
         Ok(Self {
             block_access_to: yaml.block_access_to,
             commands_forbidden: yaml.commands_forbidden,
-            log_to: yaml.log_to,
+            log_dir: yaml.log_dir,
             internal_access_only: yaml.internal_access_only,
         })
     }

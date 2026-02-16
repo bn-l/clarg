@@ -74,9 +74,9 @@ internal_access_only: "true"
 }
 
 #[test]
-fn test_from_yaml_wrong_type_log_to_array() {
+fn test_from_yaml_wrong_type_log_dir_array() {
     let yaml = r#"
-log_to: ["/tmp/clarg.log"]
+log_dir: ["/tmp/clarg.log"]
 "#;
     let file = create_yaml_file(yaml);
     let result = Config::from_yaml(&file.path().to_path_buf());
@@ -137,7 +137,7 @@ nested:
     assert_eq!(config.block_access_to.len(), 1);
     assert_eq!(config.block_access_to[0], ".env");
     assert_eq!(config.commands_forbidden.len(), 0);
-    assert_eq!(config.log_to, None);
+    assert_eq!(config.log_dir, None);
     assert_eq!(config.internal_access_only, false);
 }
 
@@ -166,14 +166,14 @@ commands_forbidden: null
 }
 
 #[test]
-fn test_from_yaml_null_log_to() {
+fn test_from_yaml_null_log_dir() {
     let yaml = r#"
-log_to: null
+log_dir: null
 "#;
     let file = create_yaml_file(yaml);
     let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
 
-    assert_eq!(config.log_to, None);
+    assert_eq!(config.log_dir, None);
 }
 
 #[test]

@@ -74,31 +74,31 @@ fn test_long_flag_commands_forbidden_equals_syntax() {
 }
 
 // ============================================================================
-// LONG FLAG TESTS: --log-to
+// LONG FLAG TESTS: --log-dir
 // ============================================================================
 
 #[test]
-fn test_long_flag_log_to_simple_path() {
-    let args = vec!["clarg", "--log-to", "/tmp/clarg.log"];
+fn test_long_flag_log_dir_simple_path() {
+    let args = vec!["clarg", "--log-dir", "/tmp/clarg.log"];
     let cli = Cli::try_parse_from(args).unwrap();
 
-    assert_eq!(cli.log_to, Some("/tmp/clarg.log".into()));
+    assert_eq!(cli.log_dir, Some("/tmp/clarg.log".into()));
 }
 
 #[test]
-fn test_long_flag_log_to_equals_syntax() {
-    let args = vec!["clarg", "--log-to=/tmp/clarg.log"];
+fn test_long_flag_log_dir_equals_syntax() {
+    let args = vec!["clarg", "--log-dir=/tmp/clarg.log"];
     let cli = Cli::try_parse_from(args).unwrap();
 
-    assert_eq!(cli.log_to, Some("/tmp/clarg.log".into()));
+    assert_eq!(cli.log_dir, Some("/tmp/clarg.log".into()));
 }
 
 #[test]
-fn test_long_flag_log_to_path_with_spaces() {
-    let args = vec!["clarg", "--log-to", "My Documents/logs/clarg.log"];
+fn test_long_flag_log_dir_path_with_spaces() {
+    let args = vec!["clarg", "--log-dir", "My Documents/logs/clarg.log"];
     let cli = Cli::try_parse_from(args).unwrap();
 
-    assert_eq!(cli.log_to, Some("My Documents/logs/clarg.log".into()));
+    assert_eq!(cli.log_dir, Some("My Documents/logs/clarg.log".into()));
 }
 
 // ============================================================================
