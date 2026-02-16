@@ -51,6 +51,30 @@ commands_forbidden:
 internal_access_only: true
 ```
 
+## Logging
+
+All tool evaluations are logged to a rotating file at:
+
+```
+$XDG_STATE_HOME/clarg/clarg.log
+```
+
+which defaults to `~/.local/state/clarg/clarg.log` (symlink to the current log file).
+
+Logs rotate at 1 MB with 3 old files kept.
+
+To override the log directory:
+
+```bash
+clarg -l /tmp/clarg-logs -b '.env' -i
+```
+
+Or in YAML config:
+
+```yaml
+log_dir: /tmp/clarg-logs
+```
+
 ## Exit codes
 
 - `0` allow
