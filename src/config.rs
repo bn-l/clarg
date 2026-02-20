@@ -29,6 +29,22 @@ struct YamlConfig {
 impl Config {
     pub fn from_cli(cli: Cli) -> Result<Self> {
         if let Some(config_path) = cli.config_path {
+            // If the config path is relative, resolve it against CLAUDE_PROJECT_DIR
+            // so that `cd` during a session doesn't break config loading.
+            let config_path = if config_path.is_relative() {
+                if let Some(project_dir) = std::env::var_os("CLAUDE_PROJECT_DIR") {
+                    let resolved = PathBuf::from(project_dir).join(&config_path);
+                    log::debug!(
+                        "resolved relative config path against CLAUDE_PROJECT_DIR: {}",
+                        resolved.display()
+                    );
+                    resolved
+                } else {
+                    config_path
+                }
+            } else {
+                config_path
+            };
             let config = Self::from_yaml(&config_path)?;
             log::info!("config loaded from YAML: {}", config_path.display());
             Ok(config)

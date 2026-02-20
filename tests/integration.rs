@@ -582,3 +582,104 @@ fn test_log_dir_file() {
     assert!(log_contents.contains("tool=Bash"), "log should contain tool name, got: {log_contents}");
     assert!(log_contents.contains("ALLOW"), "log should contain ALLOW verdict, got: {log_contents}");
 }
+
+// --- Relative config path resolved against CLAUDE_PROJECT_DIR ---
+
+#[test]
+fn test_relative_config_resolved_against_project_dir() {
+    use std::io::Write;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let project_dir = tmp.path().canonicalize().unwrap();
+
+    // Create .claude/clarg.yaml inside the temp "project"
+    let config_dir = project_dir.join(".claude");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    std::fs::write(
+        config_dir.join("clarg.yaml"),
+        "internal_access_only: true\n",
+    )
+    .unwrap();
+
+    let input = serde_json::json!({
+        "session_id": "test",
+        "cwd": project_dir,
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Read",
+        "tool_input": {"file_path": format!("{}/file.txt", project_dir.display())}
+    })
+    .to_string();
+
+    // Run clarg from a *different* directory (simulating cd during session)
+    // but with CLAUDE_PROJECT_DIR pointing to the project root
+    let mut cmd = clarg_bin();
+    cmd.arg(".claude/clarg.yaml"); // relative path
+    cmd.env("CLAUDE_PROJECT_DIR", project_dir.to_str().unwrap());
+    cmd.current_dir("/tmp"); // simulate changed cwd
+    cmd.stdin(std::process::Stdio::piped());
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+
+    let mut child = cmd.spawn().unwrap();
+    {
+        let stdin = child.stdin.as_mut().unwrap();
+        stdin.write_all(input.as_bytes()).unwrap();
+    }
+    drop(child.stdin.take());
+
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "relative config path should resolve against CLAUDE_PROJECT_DIR, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn test_relative_config_without_project_dir_uses_cwd() {
+    use std::io::Write;
+
+    let tmp = tempfile::tempdir().unwrap();
+    let project_dir = tmp.path().canonicalize().unwrap();
+
+    // Create clarg.yaml inside the temp dir
+    std::fs::write(
+        project_dir.join("clarg.yaml"),
+        "internal_access_only: false\n",
+    )
+    .unwrap();
+
+    let input = serde_json::json!({
+        "session_id": "test",
+        "cwd": project_dir,
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "echo hi"}
+    })
+    .to_string();
+
+    // No CLAUDE_PROJECT_DIR set — relative path should resolve against actual cwd
+    let mut cmd = clarg_bin();
+    cmd.arg("clarg.yaml");
+    cmd.env_remove("CLAUDE_PROJECT_DIR");
+    cmd.current_dir(&project_dir);
+    cmd.stdin(std::process::Stdio::piped());
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+
+    let mut child = cmd.spawn().unwrap();
+    {
+        let stdin = child.stdin.as_mut().unwrap();
+        stdin.write_all(input.as_bytes()).unwrap();
+    }
+    drop(child.stdin.take());
+
+    let output = child.wait_with_output().unwrap();
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "without CLAUDE_PROJECT_DIR, relative config should resolve against cwd, stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
