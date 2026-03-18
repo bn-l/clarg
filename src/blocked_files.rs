@@ -1,9 +1,10 @@
 use eyre::{Result, WrapErr};
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub struct BlockedFilesRule {
     matcher: Gitignore,
+    root: PathBuf,
 }
 
 impl BlockedFilesRule {
@@ -18,11 +19,24 @@ impl BlockedFilesRule {
         let matcher = builder
             .build()
             .wrap_err("failed to build gitignore matcher")?;
-        Ok(Self { matcher })
+        Ok(Self {
+            matcher,
+            root: project_root.to_path_buf(),
+        })
     }
 
     /// Check if a path is blocked. Returns Some(reason) if blocked, None if allowed.
     pub fn check(&self, path: &Path) -> Option<String> {
+        // matched_path_or_any_parents panics if the path is not under the root
+        // (ignore crate assertion in gitignore.rs). Paths outside the project
+        // root cannot match project-relative blocked patterns, so skip them.
+        if !path.starts_with(&self.root) {
+            log::debug!(
+                "blocked_files: '{}' outside project root, skipping",
+                path.display(),
+            );
+            return None;
+        }
         let is_dir = path.to_str().is_some_and(|s| s.ends_with('/'));
         let matched = self.matcher.matched_path_or_any_parents(path, is_dir);
         if matched.is_ignore() {
