@@ -69,6 +69,42 @@ fn test_reason_with_complex_pattern() {
     assert!(reason.contains("**/*.pem"));
 }
 
+#[test]
+fn test_reason_directory_pattern_preserves_trailing_slash() {
+    // Regression: gix_glob::Pattern's Display impl reconstructs the
+    // trailing slash from the MUST_BE_DIR mode flag (text alone has no
+    // trailing /). Lock that round-trip so we don't silently regress
+    // the user-facing pattern format.
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    let rule = BlockedFilesRule::new(&["node_modules/".to_string()], &project_root)
+        .unwrap();
+    let reason = rule
+        .check(&project_root.join("node_modules/lib/index.js"))
+        .expect("should block via parent walk");
+    assert!(
+        reason.contains("node_modules/"),
+        "expected `node_modules/` (with trailing slash) in reason, got: {reason}"
+    );
+}
+
+#[test]
+fn test_reason_anchored_pattern_preserves_leading_slash() {
+    // Companion to the trailing-slash regression: ABSOLUTE-mode
+    // patterns must round-trip with their leading `/` via Display.
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    let rule =
+        BlockedFilesRule::new(&["/root.txt".to_string()], &project_root).unwrap();
+    let reason = rule
+        .check(&project_root.join("root.txt"))
+        .expect("should block project-anchored root.txt");
+    assert!(
+        reason.contains("/root.txt"),
+        "expected `/root.txt` (with leading slash) in reason, got: {reason}"
+    );
+}
+
 // ============================================================================
 // No match returns None
 // ============================================================================
