@@ -19,7 +19,16 @@ pub struct Cli {
     #[arg(conflicts_with_all = ["block_access_to", "commands_forbidden", "log_dir", "internal_access_only"])]
     pub config_path: Option<PathBuf>,
 
-    /// Gitignore-style file patterns to block (comma or space separated)
+    /// Gitignore-style file patterns to block (comma or space separated).
+    /// Patterns starting with `~`, `~/`, `$HOME`, or `$HOME/` are
+    /// home-expanded and match absolute paths anywhere on the filesystem
+    /// (e.g. `~/.ssh/**`). Other patterns use classic gitignore semantics
+    /// anchored at the project root for in-project paths, and additionally
+    /// match against the absolute form for paths *outside* the project —
+    /// so `/etc/shadow` blocks the real `/etc/shadow`, and unanchored
+    /// patterns like `.env` block any matching basename anywhere clarg
+    /// sees a tool target. Use `-i` for blanket "everything outside the
+    /// project" blocking.
     #[arg(short = 'b', long = "block-access-to", value_delimiter = ',', num_args = 1..)]
     pub block_access_to: Vec<String>,
 

@@ -185,7 +185,9 @@ impl RuleSet {
             }
         }
 
-        // Check blocked files against extracted paths
+        // Check blocked files against extracted paths. The gix-ignore
+        // matcher handles paths both inside and outside the project root,
+        // so no containment pre-check is needed here.
         if let Some(rule) = &self.blocked_files {
             for ep in &paths {
                 // Skip non-path contexts
@@ -195,14 +197,9 @@ impl RuleSet {
                 ) {
                     continue;
                 }
-                let resolved =
-                    resolve_target(&ep.raw, &self.project_root);
-                // Only check paths under the project root — the gitignore
-                // matcher requires paths to be under its root.
-                if resolved.starts_with(&self.project_root) {
-                    if let Some(reason) = rule.check(&resolved) {
-                        return Verdict::Deny(reason);
-                    }
+                let resolved = resolve_target(&ep.raw, &self.project_root);
+                if let Some(reason) = rule.check(&resolved) {
+                    return Verdict::Deny(reason);
                 }
             }
         }

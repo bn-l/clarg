@@ -4,11 +4,12 @@ version = "0.1.5"
 edition = "2024"
 
 [dependencies]
+bstr = "1.12"
 clap = { version = "4.5.57", features = ["derive"] }
 color-eyre = "0.6.5"
 eyre = "0.6.12"
 flexi_logger = "0.31"
-ignore = "0.4.25"
+gix-ignore = "0.19"
 log = "0.4"
 regex = "1.12.3"
 serde = { version = "1.0.228", features = ["derive"] }
