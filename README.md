@@ -51,6 +51,20 @@ commands_forbidden:
 internal_access_only: true
 ```
 
+### Pattern scope
+
+Patterns in `block_access_to` use gitignore syntax and match anywhere by default — `.env` blocks both `<project>/.env` and `/Users/alice/.env`.
+
+To restrict a pattern to the project, anchor it with a leading `/`:
+
+```yaml
+block_access_to:
+  - /.env              # only <project>/.env
+  - /secrets/**        # only <project>/secrets/**
+```
+
+Patterns starting with `~` or `$HOME` are home-expanded (e.g. `~/.ssh/**`).
+
 ## Logging
 
 All tool evaluations are logged to a rotating file at:
