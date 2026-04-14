@@ -189,3 +189,81 @@ internal_access_only: null
 }
 
 // ============================================================================
+// special_flags: typo rejection is scoped to the section (deny_unknown_fields).
+// Top-level unknown fields remain silently ignored by design.
+// ============================================================================
+
+#[test]
+fn test_from_yaml_special_flags_unknown_nested_key_errors() {
+    let yaml = r#"
+special_flags:
+  no_root: true
+  no_rot: true
+"#;
+    let file = create_yaml_file(yaml);
+    let result = Config::from_yaml(&file.path().to_path_buf());
+    assert!(
+        result.is_err(),
+        "typo inside special_flags must fail closed, got: {:?}",
+        result.map(|_| "Ok")
+    );
+}
+
+#[test]
+fn test_from_yaml_special_flags_no_unknown_tools_wrong_type() {
+    let yaml = r#"
+special_flags:
+  no_unknown_tools: "true"
+"#;
+    let file = create_yaml_file(yaml);
+    let result = Config::from_yaml(&file.path().to_path_buf());
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_from_yaml_special_flags_no_root_wrong_type() {
+    let yaml = r#"
+special_flags:
+  no_root: 1
+"#;
+    let file = create_yaml_file(yaml);
+    let result = Config::from_yaml(&file.path().to_path_buf());
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_from_yaml_special_flags_no_root_null_errors() {
+    let yaml = r#"
+special_flags:
+  no_root: null
+"#;
+    let file = create_yaml_file(yaml);
+    let result = Config::from_yaml(&file.path().to_path_buf());
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_from_yaml_special_flags_no_unknown_tools_null_errors() {
+    let yaml = r#"
+special_flags:
+  no_unknown_tools: null
+"#;
+    let file = create_yaml_file(yaml);
+    let result = Config::from_yaml(&file.path().to_path_buf());
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_from_yaml_top_level_unknown_keys_still_ignored_alongside_special_flags() {
+    // Top-level unknown keys remain silently ignored (pre-existing behavior).
+    let yaml = r#"
+random_top_level_key: true
+special_flags:
+  no_root: true
+"#;
+    let file = create_yaml_file(yaml);
+    let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
+    assert_eq!(config.no_root, true);
+}
+
+// ============================================================================

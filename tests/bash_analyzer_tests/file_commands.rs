@@ -205,6 +205,22 @@ fn test_mkdir_p_outside_blocked() {
     assert!(result.is_some());
 }
 
+#[test]
+fn test_rmdir_outside_blocked() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    let result = analyze("rmdir /tmp/somedir", &project_root);
+    assert!(result.is_some());
+}
+
+#[test]
+fn test_pushd_outside_blocked() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    let result = analyze("pushd /tmp", &project_root);
+    assert!(result.is_some());
+}
+
 // ============================================================================
 // head/tail commands
 // ============================================================================

@@ -1,3 +1,4 @@
+mod brace_expansion;
 mod cd_command;
 mod download_commands;
 mod eval_and_shell;

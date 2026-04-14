@@ -53,6 +53,9 @@ fn test_from_cli_only_block_access_to() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let config = Config::from_cli(cli).unwrap();
 
@@ -72,6 +75,9 @@ fn test_from_cli_only_commands_forbidden() {
         commands_forbidden: vec!["dd".to_string(), "mkfs".to_string()],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let config = Config::from_cli(cli).unwrap();
 
@@ -91,6 +97,9 @@ fn test_from_cli_only_log_dir() {
         commands_forbidden: vec![],
         log_dir: Some(PathBuf::from("/var/log/clarg")),
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let config = Config::from_cli(cli).unwrap();
 
@@ -108,6 +117,9 @@ fn test_from_cli_only_internal_access_only() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let config = Config::from_cli(cli).unwrap();
 
@@ -115,6 +127,82 @@ fn test_from_cli_only_internal_access_only() {
     assert_eq!(config.commands_forbidden.len(), 0);
     assert_eq!(config.log_dir, None);
     assert_eq!(config.internal_access_only, true);
+}
+
+#[test]
+fn test_from_cli_only_no_root() {
+    let cli = Cli {
+        config_path: None,
+        block_access_to: vec![],
+        commands_forbidden: vec![],
+        log_dir: None,
+        internal_access_only: false,
+        no_root: true,
+        no_system_dirs: false,
+        no_unknown_tools: false,
+    };
+    let config = Config::from_cli(cli).unwrap();
+    assert_eq!(config.no_root, true);
+    assert_eq!(config.no_system_dirs, false);
+    assert_eq!(config.no_unknown_tools, false);
+}
+
+#[test]
+fn test_from_cli_only_no_system_dirs() {
+    let cli = Cli {
+        config_path: None,
+        block_access_to: vec![],
+        commands_forbidden: vec![],
+        log_dir: None,
+        internal_access_only: false,
+        no_root: false,
+        no_system_dirs: true,
+        no_unknown_tools: false,
+    };
+    let config = Config::from_cli(cli).unwrap();
+    assert_eq!(config.no_root, false);
+    assert_eq!(config.no_system_dirs, true);
+    assert_eq!(config.no_unknown_tools, false);
+}
+
+#[test]
+fn test_from_cli_only_no_unknown_tools() {
+    let cli = Cli {
+        config_path: None,
+        block_access_to: vec![],
+        commands_forbidden: vec![],
+        log_dir: None,
+        internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: true,
+    };
+    let config = Config::from_cli(cli).unwrap();
+    assert_eq!(config.no_root, false);
+    assert_eq!(config.no_system_dirs, false);
+    assert_eq!(config.no_unknown_tools, true);
+}
+
+#[test]
+fn test_from_cli_with_config_path_no_unknown_tools() {
+    // Ensure a YAML config with no_unknown_tools comes through.
+    let yaml = r#"
+special_flags:
+  no_unknown_tools: true
+"#;
+    let file = create_yaml_file(yaml);
+    let cli = Cli {
+        config_path: Some(file.path().to_path_buf()),
+        block_access_to: vec![],
+        commands_forbidden: vec![],
+        log_dir: None,
+        internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
+    };
+    let config = Config::from_cli(cli).unwrap();
+    assert_eq!(config.no_unknown_tools, true);
 }
 
 #[test]
@@ -135,6 +223,9 @@ internal_access_only: true
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let config = Config::from_cli(cli).unwrap();
 

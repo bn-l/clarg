@@ -94,16 +94,69 @@ fn test_sed_multiple_files_one_external_blocked() {
 // sed with -f pointing to external script (blocked)
 // ============================================================================
 
-// TODO: Not yet implemented - sed -f argument is skipped without checking
-// if the script file path is external
 #[test]
-#[ignore]
 fn test_sed_f_flag_external_script_blocked() {
     let tmp = TempDir::new().unwrap();
     let project_root = tmp.path().canonicalize().unwrap();
     let cmd = "sed -f /tmp/malicious.sed file.txt";
     let result = analyze(cmd, &project_root);
     assert!(result.is_some());
+}
+
+#[test]
+fn test_sed_long_file_flag_separated_external_blocked() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    let cmd = "sed --file /tmp/malicious.sed file.txt";
+    let result = analyze(cmd, &project_root);
+    assert!(result.is_some(), "sed --file <external> should be blocked");
+}
+
+#[test]
+fn test_sed_long_file_flag_equals_external_blocked() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    let cmd = "sed --file=/tmp/malicious.sed file.txt";
+    let result = analyze(cmd, &project_root);
+    assert!(result.is_some(), "sed --file=<external> should be blocked");
+}
+
+#[test]
+fn test_sed_short_file_flag_concatenated_external_blocked() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    let cmd = "sed -f/tmp/malicious.sed file.txt";
+    let result = analyze(cmd, &project_root);
+    assert!(result.is_some(), "sed -f<external> should be blocked");
+}
+
+#[test]
+fn test_sed_expression_flag_separated_internal_allowed() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    // --expression <expr>: expression is sed code, not a path.
+    let cmd = "sed --expression 's/foo/bar/' file.txt";
+    let result = analyze(cmd, &project_root);
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_sed_expression_flag_equals_internal_allowed() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    let cmd = "sed --expression=s/foo/bar/ file.txt";
+    let result = analyze(cmd, &project_root);
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_sed_f_flag_internal_script_allowed() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    // Project-relative script file stays allowed.
+    let cmd = "sed -f script.sed file.txt";
+    let result = analyze(cmd, &project_root);
+    assert!(result.is_none());
 }
 
 // ============================================================================

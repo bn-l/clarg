@@ -14,6 +14,9 @@ fn test_build_with_empty_config() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());
@@ -27,6 +30,9 @@ fn test_build_with_internal_only() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());
@@ -40,6 +46,9 @@ fn test_build_with_blocked_files() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());
@@ -53,6 +62,9 @@ fn test_build_with_blocked_commands() {
         commands_forbidden: vec!["rm -rf".to_string(), "drop table".to_string()],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());
@@ -66,6 +78,9 @@ fn test_build_with_all_rules() {
         commands_forbidden: vec!["rm -rf".to_string()],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());
@@ -79,6 +94,9 @@ fn test_build_with_invalid_regex_fails() {
         commands_forbidden: vec!["[invalid".to_string()],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_err());
@@ -91,6 +109,9 @@ fn test_build_with_nonexistent_project_root_for_internal_only_fails() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let result = RuleSet::build(&config, std::path::Path::new("/nonexistent/path/xyz123"));
     assert!(result.is_err());
@@ -104,6 +125,9 @@ fn test_build_blocked_files_without_internal_only() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());
@@ -122,6 +146,9 @@ fn test_build_with_multiple_file_patterns() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());
@@ -140,6 +167,9 @@ fn test_build_with_multiple_command_patterns() {
         ],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());

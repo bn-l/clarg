@@ -217,6 +217,59 @@ fn test_check_directory_pattern_matches_contents() {
     assert!(rule.check(&path).is_some());
 }
 
+// ============================================================================
+// Directory-only patterns with the is_dir_hint (closes the `cd secrets` bypass)
+// ============================================================================
+
+#[test]
+fn test_dir_only_pattern_matches_leaf_with_hint() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    let rule = BlockedFilesRule::new(&["secrets/".to_string()], &project_root).unwrap();
+
+    // Caller (router) knows `cd secrets` targets a directory — pass the
+    // hint and verify the directory-only pattern fires on the leaf.
+    let path = project_root.join("secrets");
+    assert!(rule.check_with_hint(&path, Some(true)).is_some());
+}
+
+#[test]
+fn test_dir_only_pattern_matches_existing_directory_via_fs_probe() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    std::fs::create_dir(project_root.join("secrets")).unwrap();
+    let rule = BlockedFilesRule::new(&["secrets/".to_string()], &project_root).unwrap();
+
+    // No explicit hint; FS probe should supply `is_dir=Some(true)`.
+    let path = project_root.join("secrets");
+    assert!(rule.check(&path).is_some());
+}
+
+#[test]
+fn test_dir_only_pattern_does_not_match_file_leaf() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    // A FILE named `secrets` must not trigger the directory-only pattern.
+    // This preserves strict gitignore semantics even after the hint work.
+    std::fs::write(project_root.join("secrets"), b"hi").unwrap();
+    let rule = BlockedFilesRule::new(&["secrets/".to_string()], &project_root).unwrap();
+
+    let path = project_root.join("secrets");
+    assert!(rule.check(&path).is_none());
+}
+
+#[test]
+fn test_dir_only_pattern_without_hint_on_nonexistent_leaf_still_misses() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    // When there's no hint AND the path doesn't exist, directory-only
+    // patterns cannot fire. Callers that know semantic intent (like the
+    // router for `cd`/`mkdir`) should pass the hint to close this gap.
+    let rule = BlockedFilesRule::new(&["secrets/".to_string()], &project_root).unwrap();
+    let path = project_root.join("does-not-exist-yet");
+    assert!(rule.check(&path).is_none());
+}
+
 #[test]
 fn test_check_directory_pattern_nested() {
     let tmp = TempDir::new().unwrap();

@@ -44,6 +44,9 @@ fn test_glob_no_rules_allows_anything() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_glob_input("/etc", "*.conf", tmp.path().to_path_buf());
@@ -66,6 +69,9 @@ fn test_glob_internal_only_blocks_external_path() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_glob_input("/etc", "*.conf", tmp.path().to_path_buf());
@@ -87,6 +93,9 @@ fn test_glob_internal_only_allows_internal_path() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let path = project_root.join("src").to_string_lossy().to_string();
@@ -106,6 +115,9 @@ fn test_glob_internal_only_blocks_tilde_path() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_glob_input("~/Documents", "*.txt", tmp.path().to_path_buf());
@@ -125,6 +137,9 @@ fn test_glob_internal_only_blocks_parent_traversal() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let path = project_root.join("../..").to_string_lossy().to_string();
@@ -149,6 +164,9 @@ fn test_glob_blocked_files_denies_blocked_path() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     let path = project_root.join("secrets").to_string_lossy().to_string();
@@ -171,6 +189,9 @@ fn test_glob_blocked_files_allows_non_blocked_path() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     let path = project_root.join("src").to_string_lossy().to_string();
@@ -194,6 +215,9 @@ fn test_glob_internal_checked_before_blocked_files() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // External path that also matches blocked_files
@@ -220,6 +244,9 @@ fn test_glob_missing_path_allowed() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -252,6 +279,9 @@ fn test_glob_relative_path_inside_allowed() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_glob_input_path_only("./src", tmp.path().to_path_buf());
@@ -270,6 +300,9 @@ fn test_glob_relative_parent_traversal_blocked() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_glob_input_path_only("../outside", tmp.path().to_path_buf());
@@ -277,5 +310,55 @@ fn test_glob_relative_parent_traversal_blocked() {
     match ruleset.evaluate(&input) {
         Verdict::Allow => panic!("expected deny"),
         Verdict::Deny(_) => {}
+    }
+}
+
+// ============================================================================
+// special_flags: no_root / no_system_dirs wiring
+// ============================================================================
+
+#[test]
+fn test_glob_no_root_blocks_root() {
+    let tmp = TempDir::new().unwrap();
+    let config = Config {
+        block_access_to: vec![],
+        commands_forbidden: vec![],
+        log_dir: None,
+        internal_access_only: false,
+        no_root: true,
+        no_system_dirs: false,
+        no_unknown_tools: false,
+    };
+    let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
+    let input = make_glob_input_path_only("/", tmp.path().to_path_buf());
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(reason) => {
+            assert!(reason.contains("no_root"), "got: {}", reason);
+        }
+    }
+}
+
+#[test]
+fn test_glob_no_system_dirs_blocks_usr() {
+    let tmp = TempDir::new().unwrap();
+    let config = Config {
+        block_access_to: vec![],
+        commands_forbidden: vec![],
+        log_dir: None,
+        internal_access_only: false,
+        no_root: false,
+        no_system_dirs: true,
+        no_unknown_tools: false,
+    };
+    let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
+    let input = make_glob_input_path_only("/usr", tmp.path().to_path_buf());
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(reason) => {
+            assert!(reason.contains("no_system_dirs"), "got: {}", reason);
+        }
     }
 }

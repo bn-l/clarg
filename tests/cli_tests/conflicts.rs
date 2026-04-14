@@ -99,6 +99,33 @@ fn test_config_path_conflicts_with_all_flags() {
 }
 
 #[test]
+fn test_config_path_conflicts_with_no_root() {
+    let args = vec!["clarg", "config.yaml", "--no-root"];
+    let result = Cli::try_parse_from(args);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.to_string().contains("conflict") || err.to_string().contains("cannot be used"));
+}
+
+#[test]
+fn test_config_path_conflicts_with_no_system_dirs() {
+    let args = vec!["clarg", "config.yaml", "--no-system-dirs"];
+    let result = Cli::try_parse_from(args);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.to_string().contains("conflict") || err.to_string().contains("cannot be used"));
+}
+
+#[test]
+fn test_config_path_conflicts_with_no_unknown_tools() {
+    let args = vec!["clarg", "config.yaml", "--no-unknown-tools"];
+    let result = Cli::try_parse_from(args);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.to_string().contains("conflict") || err.to_string().contains("cannot be used"));
+}
+
+#[test]
 fn test_config_path_conflicts_with_multiple_flags_long_form() {
     let args = vec![
         "clarg",

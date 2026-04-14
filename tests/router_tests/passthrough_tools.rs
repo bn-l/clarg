@@ -16,6 +16,9 @@ fn test_webfetch_always_allowed_no_rules() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -44,6 +47,9 @@ fn test_webfetch_allowed_with_internal_only() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -72,6 +78,9 @@ fn test_webfetch_allowed_with_all_rules() {
         commands_forbidden: vec!["curl".to_string()],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -104,6 +113,9 @@ fn test_websearch_always_allowed_no_rules() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -132,6 +144,9 @@ fn test_websearch_allowed_with_internal_only() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -164,6 +179,9 @@ fn test_task_always_allowed_no_rules() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -194,6 +212,9 @@ fn test_task_allowed_with_internal_only() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -228,6 +249,9 @@ fn test_unknown_tool_allowed_no_rules() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -256,6 +280,9 @@ fn test_unknown_tool_allowed_with_all_rules() {
         commands_forbidden: vec!["rm".to_string()],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -285,6 +312,9 @@ fn test_mcp_tool_allowed() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -317,6 +347,9 @@ fn test_webfetch_empty_input_allowed() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -343,6 +376,9 @@ fn test_task_empty_input_allowed() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -373,6 +409,9 @@ fn test_bash_lowercase_routed_correctly() {
         commands_forbidden: vec!["rm -rf".to_string()],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -401,6 +440,9 @@ fn test_bash_uppercase_routed_correctly() {
         commands_forbidden: vec!["rm -rf".to_string()],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -429,6 +471,9 @@ fn test_read_mixed_case_routed_correctly() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -455,6 +500,9 @@ fn test_glob_case_insensitive_routing() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -473,6 +521,214 @@ fn test_glob_case_insensitive_routing() {
     }
 }
 
+// ============================================================================
+// no_unknown_tools: default-off baseline is already tested above.
+// Below we verify the flag's effect and that it does NOT catch known tools.
+// ============================================================================
+
+fn no_unknown_tools_config() -> Config {
+    Config {
+        block_access_to: vec![],
+        commands_forbidden: vec![],
+        log_dir: None,
+        internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: true,
+    }
+}
+
+#[test]
+fn test_unknown_tool_denied_when_no_unknown_tools() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_unknown_tools_config(), tmp.path()).unwrap();
+
+    let json = json!({
+        "session_id": "test-session",
+        "cwd": tmp.path(),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "CustomMcpTool",
+        "tool_input": {"arbitrary": "data"}
+    });
+    let input: HookInput = serde_json::from_value(json).unwrap();
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny for unknown tool under no_unknown_tools"),
+        Verdict::Deny(_) => {}
+    }
+}
+
+#[test]
+fn test_unknown_tool_denied_with_all_other_rules_when_no_unknown_tools() {
+    let tmp = TempDir::new().unwrap();
+    let config = Config {
+        block_access_to: vec![".env".to_string()],
+        commands_forbidden: vec!["rm".to_string()],
+        log_dir: None,
+        internal_access_only: true,
+        no_root: true,
+        no_system_dirs: true,
+        no_unknown_tools: true,
+    };
+    let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
+    let json = json!({
+        "session_id": "test-session",
+        "cwd": tmp.path(),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "SomeNewTool",
+        "tool_input": {"file": "/etc/passwd"}
+    });
+    let input: HookInput = serde_json::from_value(json).unwrap();
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(_) => {}
+    }
+}
+
+#[test]
+fn test_unknown_tool_reason_mentions_tool_name_and_flag() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_unknown_tools_config(), tmp.path()).unwrap();
+    let json = json!({
+        "session_id": "test-session",
+        "cwd": tmp.path(),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "WeirdNewTool",
+        "tool_input": {}
+    });
+    let input: HookInput = serde_json::from_value(json).unwrap();
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(reason) => {
+            assert!(reason.contains("WeirdNewTool"), "got: {}", reason);
+            assert!(reason.contains("no_unknown_tools"), "got: {}", reason);
+        }
+    }
+}
+
+#[test]
+fn test_mcp_tool_denied_when_no_unknown_tools() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_unknown_tools_config(), tmp.path()).unwrap();
+    let json = json!({
+        "session_id": "test-session",
+        "cwd": tmp.path(),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "mcp__filesystem__read_file",
+        "tool_input": {"path": "/etc/passwd"}
+    });
+    let input: HookInput = serde_json::from_value(json).unwrap();
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny for MCP tool under no_unknown_tools"),
+        Verdict::Deny(reason) => {
+            assert!(reason.contains("mcp__filesystem__read_file"), "got: {}", reason);
+        }
+    }
+}
+
+#[test]
+fn test_webfetch_still_allowed_when_no_unknown_tools() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_unknown_tools_config(), tmp.path()).unwrap();
+    let json = json!({
+        "session_id": "test-session",
+        "cwd": tmp.path(),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "WebFetch",
+        "tool_input": {"url": "https://example.com"}
+    });
+    let input: HookInput = serde_json::from_value(json).unwrap();
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => {}
+        Verdict::Deny(reason) => panic!("expected allow, got deny: {}", reason),
+    }
+}
+
+#[test]
+fn test_task_still_allowed_when_no_unknown_tools() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_unknown_tools_config(), tmp.path()).unwrap();
+    let json = json!({
+        "session_id": "test-session",
+        "cwd": tmp.path(),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Task",
+        "tool_input": {"description": "x", "prompt": "y", "subagent_type": "Explore"}
+    });
+    let input: HookInput = serde_json::from_value(json).unwrap();
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => {}
+        Verdict::Deny(reason) => panic!("expected allow, got deny: {}", reason),
+    }
+}
+
+#[test]
+fn test_bash_still_routed_when_no_unknown_tools() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_unknown_tools_config(), tmp.path()).unwrap();
+    let json = json!({
+        "session_id": "test-session",
+        "cwd": tmp.path(),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Bash",
+        "tool_input": {"command": "echo hi"}
+    });
+    let input: HookInput = serde_json::from_value(json).unwrap();
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => {}
+        Verdict::Deny(reason) => panic!("expected allow, got deny: {}", reason),
+    }
+}
+
+#[test]
+fn test_read_still_routed_when_no_unknown_tools() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_unknown_tools_config(), tmp.path()).unwrap();
+    let file_path = tmp.path().join("file.txt").to_string_lossy().to_string();
+    let json = json!({
+        "session_id": "test-session",
+        "cwd": tmp.path(),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "Read",
+        "tool_input": {"file_path": file_path}
+    });
+    let input: HookInput = serde_json::from_value(json).unwrap();
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => {}
+        Verdict::Deny(reason) => panic!("expected allow, got deny: {}", reason),
+    }
+}
+
+#[test]
+fn test_known_tool_mixed_case_allowed_when_no_unknown_tools() {
+    // Case-insensitive routing must still work under the flag.
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_unknown_tools_config(), tmp.path()).unwrap();
+    let json = json!({
+        "session_id": "test-session",
+        "cwd": tmp.path(),
+        "hook_event_name": "PreToolUse",
+        "tool_name": "WeBfEtCh",
+        "tool_input": {"url": "https://example.com"}
+    });
+    let input: HookInput = serde_json::from_value(json).unwrap();
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => {}
+        Verdict::Deny(reason) => panic!(
+            "expected allow for mixed-case known tool under no_unknown_tools, got deny: {}",
+            reason
+        ),
+    }
+}
+
 #[test]
 fn test_grep_lowercase_routed_correctly() {
     let tmp = TempDir::new().unwrap();
@@ -481,6 +737,9 @@ fn test_grep_lowercase_routed_correctly() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 

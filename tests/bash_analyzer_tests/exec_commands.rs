@@ -243,11 +243,23 @@ fn test_perl_e_with_external_path_blocked() {
 }
 
 #[test]
-fn test_python_c_internal_path_allowed() {
+fn test_python_c_inline_code_denied_under_internal_only() {
+    // Inline `-c` code is an opaque boundary: arbitrary interpreter
+    // code cannot be statically verified as internal-only, so `analyze()`
+    // (which represents internal-only semantics) must deny it outright
+    // even when the visible code doesn't mention any external path.
     let tmp = TempDir::new().unwrap();
     let project_root = tmp.path().canonicalize().unwrap();
     let result = analyze("python -c 'print(\"hello\")'", &project_root);
-    assert!(result.is_none(), "python -c without paths should be allowed");
+    assert!(
+        result.is_some(),
+        "python -c inline code should be denied by the internal-only oracle"
+    );
+    let reason = result.unwrap();
+    assert!(
+        reason.contains("inline code") || reason.contains("cannot be statically verified"),
+        "deny reason should reference inline-code opacity: {reason}"
+    );
 }
 
 #[test]
@@ -284,4 +296,67 @@ fn test_node_eval_flag_blocked() {
     let project_root = tmp.path().canonicalize().unwrap();
     let result = analyze("node --eval 'require(\"fs\").readFileSync(\"/etc/passwd\")'", &project_root);
     assert!(result.is_some(), "node --eval with external path should be blocked");
+}
+
+// ============================================================================
+// Inline code is an opaque boundary under internal-only semantics
+// ============================================================================
+//
+// Static analysis of arbitrary Python / Ruby / Perl / Node / PHP source
+// is undecidable. Relative traversal (`..`), dynamic construction
+// (`chr(47)+'etc'`), env lookups, base64, etc. all escape a regex-only
+// check. `analyze()` (the internal-only oracle) must therefore deny
+// inline `-c` / `-e` / `--eval` unconditionally — the sentinel fires
+// regardless of what the code string looks like.
+
+#[test]
+fn test_python_c_relative_traversal_blocked() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    let result = analyze("python -c 'import os; os.chdir(\"..\")'", &project_root);
+    assert!(
+        result.is_some(),
+        "python -c with os.chdir('..') must be denied"
+    );
+}
+
+#[test]
+fn test_python_c_dynamically_constructed_path_blocked() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    let result = analyze(
+        "python -c 'import os; p = chr(47)+\"etc\"; print(os.listdir(p))'",
+        &project_root,
+    );
+    assert!(
+        result.is_some(),
+        "dynamically built path in python -c must be denied"
+    );
+}
+
+#[test]
+fn test_ruby_e_pure_code_denied() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    let result = analyze("ruby -e 'puts 1'", &project_root);
+    assert!(result.is_some());
+}
+
+#[test]
+fn test_perl_e_pure_code_denied() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    let result = analyze("perl -e 'print 42'", &project_root);
+    assert!(result.is_some());
+}
+
+#[test]
+fn test_inline_code_deny_reason_mentions_inline_code() {
+    let tmp = TempDir::new().unwrap();
+    let project_root = tmp.path().canonicalize().unwrap();
+    let reason = analyze("python -c 'print(1)'", &project_root).unwrap();
+    assert!(
+        reason.contains("inline code") || reason.contains("statically verified"),
+        "sentinel reason should reference inline code, got: {reason}"
+    );
 }

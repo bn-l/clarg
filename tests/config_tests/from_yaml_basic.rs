@@ -148,4 +148,81 @@ fn test_from_yaml_minimal_valid() {
     assert_eq!(config.internal_access_only, false);
 }
 
+#[test]
+fn test_from_yaml_special_flags_defaults_false_when_missing() {
+    let yaml = r#"
+block_access_to:
+  - ".env"
+"#;
+    let file = create_yaml_file(yaml);
+    let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
+    assert_eq!(config.no_root, false);
+    assert_eq!(config.no_system_dirs, false);
+    assert_eq!(config.no_unknown_tools, false);
+}
+
+#[test]
+fn test_from_yaml_special_flags_parses_both_true() {
+    let yaml = r#"
+special_flags:
+  no_root: true
+  no_system_dirs: true
+"#;
+    let file = create_yaml_file(yaml);
+    let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
+    assert_eq!(config.no_root, true);
+    assert_eq!(config.no_system_dirs, true);
+    assert_eq!(config.no_unknown_tools, false);
+}
+
+#[test]
+fn test_from_yaml_special_flags_partial_section_defaults_other_flag_false() {
+    let yaml = r#"
+special_flags:
+  no_root: true
+"#;
+    let file = create_yaml_file(yaml);
+    let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
+    assert_eq!(config.no_root, true);
+    assert_eq!(config.no_system_dirs, false);
+    assert_eq!(config.no_unknown_tools, false);
+}
+
+#[test]
+fn test_from_yaml_all_three_special_flags_true() {
+    let yaml = r#"
+special_flags:
+  no_root: true
+  no_system_dirs: true
+  no_unknown_tools: true
+"#;
+    let file = create_yaml_file(yaml);
+    let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
+    assert_eq!(config.no_root, true);
+    assert_eq!(config.no_system_dirs, true);
+    assert_eq!(config.no_unknown_tools, true);
+}
+
+#[test]
+fn test_from_yaml_special_flags_alongside_other_fields() {
+    let yaml = r#"
+block_access_to:
+  - ".env"
+commands_forbidden:
+  - "rm -rf"
+internal_access_only: true
+special_flags:
+  no_root: true
+  no_system_dirs: false
+  no_unknown_tools: true
+"#;
+    let file = create_yaml_file(yaml);
+    let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
+    assert_eq!(config.block_access_to.len(), 1);
+    assert_eq!(config.internal_access_only, true);
+    assert_eq!(config.no_root, true);
+    assert_eq!(config.no_system_dirs, false);
+    assert_eq!(config.no_unknown_tools, true);
+}
+
 // ============================================================================

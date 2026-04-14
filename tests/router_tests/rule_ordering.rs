@@ -43,6 +43,9 @@ fn test_bash_internalonly_before_blocked_commands_external() {
         commands_forbidden: vec!["cat".to_string()],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // This command triggers BOTH rules
@@ -71,6 +74,9 @@ fn test_bash_blocked_commands_triggers_when_internal() {
         commands_forbidden: vec!["dangerous".to_string()],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // This command is internal but matches blocked pattern
@@ -97,6 +103,9 @@ fn test_bash_both_rules_pass_allows() {
         commands_forbidden: vec!["rm -rf".to_string()],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // Internal path, non-matching command
@@ -120,6 +129,9 @@ fn test_file_internalonly_before_blocked_files() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // External path that also matches blocked_files pattern
@@ -147,6 +159,9 @@ fn test_file_blocked_files_triggers_when_internal() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     // Internal path that matches blocked_files
@@ -175,6 +190,9 @@ fn test_file_both_rules_pass_allows() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     // Internal path, non-matching pattern
@@ -199,6 +217,9 @@ fn test_only_internalonly_blocks_external() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_read_input("/etc/passwd", tmp.path().to_path_buf());
@@ -218,6 +239,9 @@ fn test_only_internalonly_allows_internal() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: true,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let file_path = project_root.join("file.txt").to_string_lossy().to_string();
@@ -242,6 +266,9 @@ fn test_only_blocked_files_allows_non_matching_internal() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     // Internal path that doesn't match pattern - should be allowed
@@ -263,6 +290,9 @@ fn test_only_blocked_files_blocks_matching_pattern() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     let file_path = project_root.join(".env").to_string_lossy().to_string();
@@ -288,6 +318,9 @@ fn test_only_blocked_commands_allows_external_paths_in_bash() {
         commands_forbidden: vec!["rm -rf".to_string()],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // External path but no internal_only check
@@ -307,6 +340,9 @@ fn test_only_blocked_commands_blocks_matching_pattern() {
         commands_forbidden: vec!["rm -rf".to_string()],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_bash_input("rm -rf /important", tmp.path().to_path_buf());
@@ -331,6 +367,9 @@ fn test_no_rules_allows_everything_bash() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_bash_input("rm -rf / && cat /etc/passwd", tmp.path().to_path_buf());
@@ -338,6 +377,122 @@ fn test_no_rules_allows_everything_bash() {
     match ruleset.evaluate(&input) {
         Verdict::Allow => {}
         Verdict::Deny(_) => panic!("expected allow - no rules configured"),
+    }
+}
+
+// ============================================================================
+// Rule ordering: system_paths precedes internal_access_only and blocked_files.
+// When both match, the system_paths message wins so users see the more
+// specific "no_root" / "no_system_dirs" reason.
+// ============================================================================
+
+#[test]
+fn test_bash_system_paths_before_internal_access_only() {
+    let tmp = TempDir::new().unwrap();
+    let config = Config {
+        block_access_to: vec![],
+        commands_forbidden: vec![],
+        log_dir: None,
+        internal_access_only: true,
+        no_root: false,
+        no_system_dirs: true,
+        no_unknown_tools: false,
+    };
+    let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
+    // /etc/passwd triggers both internal_access_only and no_system_dirs.
+    let input = make_bash_input("cat /etc/passwd", tmp.path().to_path_buf());
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(reason) => {
+            assert!(
+                reason.contains("no_system_dirs"),
+                "system_paths should fire before internal_access_only, got: {}",
+                reason
+            );
+        }
+    }
+}
+
+#[test]
+fn test_bash_system_paths_before_blocked_files() {
+    let tmp = TempDir::new().unwrap();
+    let config = Config {
+        block_access_to: vec!["passwd".to_string()],
+        commands_forbidden: vec![],
+        log_dir: None,
+        internal_access_only: false,
+        no_root: false,
+        no_system_dirs: true,
+        no_unknown_tools: false,
+    };
+    let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
+    // Both rules match /etc/passwd.
+    let input = make_bash_input("cat /etc/passwd", tmp.path().to_path_buf());
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(reason) => {
+            assert!(
+                reason.contains("no_system_dirs"),
+                "system_paths should fire before blocked_files, got: {}",
+                reason
+            );
+        }
+    }
+}
+
+#[test]
+fn test_path_tool_system_paths_before_internal_access_only() {
+    let tmp = TempDir::new().unwrap();
+    let config = Config {
+        block_access_to: vec![],
+        commands_forbidden: vec![],
+        log_dir: None,
+        internal_access_only: true,
+        no_root: false,
+        no_system_dirs: true,
+        no_unknown_tools: false,
+    };
+    let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
+    let input = make_read_input("/etc/passwd", tmp.path().to_path_buf());
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(reason) => {
+            assert!(
+                reason.contains("no_system_dirs"),
+                "system_paths should fire before internal_access_only for path tools, got: {}",
+                reason
+            );
+        }
+    }
+}
+
+#[test]
+fn test_path_tool_system_paths_before_blocked_files() {
+    let tmp = TempDir::new().unwrap();
+    let config = Config {
+        block_access_to: vec!["passwd".to_string()],
+        commands_forbidden: vec![],
+        log_dir: None,
+        internal_access_only: false,
+        no_root: false,
+        no_system_dirs: true,
+        no_unknown_tools: false,
+    };
+    let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
+    let input = make_read_input("/etc/passwd", tmp.path().to_path_buf());
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(reason) => {
+            assert!(
+                reason.contains("no_system_dirs"),
+                "system_paths should fire before blocked_files for path tools, got: {}",
+                reason
+            );
+        }
     }
 }
 
@@ -349,6 +504,9 @@ fn test_no_rules_allows_everything_read() {
         commands_forbidden: vec![],
         log_dir: None,
         internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_read_input("/etc/shadow", tmp.path().to_path_buf());
