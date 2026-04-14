@@ -82,7 +82,24 @@ impl BlockedFilesRule {
 
     /// Check if a path is blocked. Returns `Some(reason)` if blocked,
     /// `None` if allowed.
+    ///
+    /// No directory hint is provided; the rule will opportunistically
+    /// probe the filesystem to decide whether directory-only patterns
+    /// (e.g. `secrets/`) should match the leaf.
     pub fn check(&self, path: &Path) -> Option<String> {
+        self.check_with_hint(path, None)
+    }
+
+    /// Check with an explicit directory hint.
+    ///
+    /// `is_dir_hint = Some(true)` tells the matcher the caller already
+    /// knows the target is a directory (e.g. `cd <X>`, `mkdir <X>`).
+    /// `is_dir_hint = None` falls back to a filesystem `is_dir()` probe
+    /// so that existing directories still trip `secrets/`-style patterns.
+    /// Directory-only gitignore semantics are preserved: a file named
+    /// `secrets` will NOT match `secrets/` even with the hint set to
+    /// `Some(false)`.
+    pub fn check_with_hint(&self, path: &Path, is_dir_hint: Option<bool>) -> Option<String> {
         let path_display = path.display().to_string();
         let bytes = path.as_os_str().as_encoded_bytes();
 
@@ -94,9 +111,18 @@ impl BlockedFilesRule {
             bytes
         };
 
+        // Resolve the effective directory hint: caller's hint wins;
+        // otherwise probe the filesystem (returns false for
+        // non-existent paths, which is the safe default).
+        let effective_hint: Option<bool> = is_dir_hint.or_else(|| {
+            if path.is_dir() { Some(true) } else { None }
+        });
+
         // 1. Absolute search (~/$HOME-prefixed patterns) against the
         //    absolute-form bytes — works for any path on the filesystem.
-        if let Some(reason) = match_search(&self.absolute_search, abs_form, &path_display) {
+        if let Some(reason) =
+            match_search(&self.absolute_search, abs_form, &path_display, effective_hint)
+        {
             return Some(reason);
         }
 
@@ -114,7 +140,9 @@ impl BlockedFilesRule {
         } else {
             bytes
         };
-        if let Some(reason) = match_search(&self.project_search, project_bytes, &path_display) {
+        if let Some(reason) =
+            match_search(&self.project_search, project_bytes, &path_display, effective_hint)
+        {
             return Some(reason);
         }
 
@@ -135,12 +163,21 @@ fn is_home_prefixed(raw: &str) -> bool {
 /// Match `path_bytes` against `search`, walking parent directories upward
 /// to emulate the `ignore` crate's `matched_path_or_any_parents`. Returns
 /// the formatted reason string on the first non-negated match.
-fn match_search(search: &Search, path_bytes: &[u8], path_display: &str) -> Option<String> {
+///
+/// `leaf_is_dir` is forwarded to the leaf `try_match` so directory-only
+/// patterns (e.g. `secrets/`) can fire when the caller knows — or a
+/// filesystem probe confirmed — that the leaf is itself a directory.
+fn match_search(
+    search: &Search,
+    path_bytes: &[u8],
+    path_display: &str,
+    leaf_is_dir: Option<bool>,
+) -> Option<String> {
     if path_bytes.is_empty() {
         return None;
     }
-    // Test the full path first.
-    if let Some(reason) = try_match(search, path_bytes, None, path_display) {
+    // Test the full path first, honouring the leaf dir hint.
+    if let Some(reason) = try_match(search, path_bytes, leaf_is_dir, path_display) {
         return Some(reason);
     }
     // Walk parents as directories.
@@ -157,14 +194,6 @@ fn match_search(search: &Search, path_bytes: &[u8], path_display: &str) -> Optio
     None
 }
 
-// TODO: when called on the leaf with `is_dir=None`, a directory-only
-// pattern (e.g. `secrets/`) won't fire if the leaf itself is the
-// directory being targeted (e.g. tool input `cd secrets`). The parent
-// walk in `match_search` catches *children* of an ignored directory but
-// not the directory itself. Could be improved by an opportunistic
-// `path.is_dir()` filesystem probe at the call site to upgrade
-// `is_dir` to `Some(true)` when the path exists. Same limitation as
-// the `ignore` crate we replaced — not a regression.
 fn try_match(
     search: &Search,
     path_bytes: &[u8],

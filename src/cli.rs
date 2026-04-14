@@ -16,7 +16,15 @@ use std::path::PathBuf;
 )]
 pub struct Cli {
     /// YAML config path — mutually exclusive with all flags
-    #[arg(conflicts_with_all = ["block_access_to", "commands_forbidden", "log_dir", "internal_access_only"])]
+    #[arg(conflicts_with_all = [
+        "block_access_to",
+        "commands_forbidden",
+        "log_dir",
+        "internal_access_only",
+        "no_root",
+        "no_system_dirs",
+        "no_unknown_tools",
+    ])]
     pub config_path: Option<PathBuf>,
 
     /// Gitignore-style file patterns to block (comma or space separated).
@@ -43,4 +51,20 @@ pub struct Cli {
     /// Block ALL filesystem access outside the project directory
     #[arg(short = 'i', long = "internal-access-only")]
     pub internal_access_only: bool,
+
+    /// Block commands/tools targeting the filesystem root '/'
+    /// (including glob forms like /*, /**, /./*, /../*).
+    #[arg(long = "no-root")]
+    pub no_root: bool,
+
+    /// Block commands/tools targeting OS-level system directories
+    /// (e.g. /etc, /usr, /var, /System, /Library). Paths inside the
+    /// project root are exempt via an escape hatch.
+    #[arg(long = "no-system-dirs")]
+    pub no_system_dirs: bool,
+
+    /// Deny any tool clarg does not explicitly recognize (includes
+    /// MCP tools like `mcp__filesystem__read_file`).
+    #[arg(long = "no-unknown-tools")]
+    pub no_unknown_tools: bool,
 }

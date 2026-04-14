@@ -11,6 +11,23 @@ pub struct Config {
     pub commands_forbidden: Vec<String>,
     pub log_dir: Option<PathBuf>,
     pub internal_access_only: bool,
+    pub no_root: bool,
+    pub no_system_dirs: bool,
+    pub no_unknown_tools: bool,
+}
+
+/// Nested `special_flags` section of the YAML config. `deny_unknown_fields`
+/// is scoped here so typos inside `special_flags` fail fast, while
+/// top-level unknown keys remain silently ignored (existing behavior).
+#[derive(Deserialize, Debug, Default)]
+#[serde(deny_unknown_fields)]
+struct SpecialFlagsYaml {
+    #[serde(default)]
+    no_root: bool,
+    #[serde(default)]
+    no_system_dirs: bool,
+    #[serde(default)]
+    no_unknown_tools: bool,
 }
 
 /// Intermediate struct for YAML deserialization.
@@ -24,6 +41,8 @@ struct YamlConfig {
     log_dir: Option<PathBuf>,
     #[serde(default)]
     internal_access_only: bool,
+    #[serde(default)]
+    special_flags: SpecialFlagsYaml,
 }
 
 impl Config {
@@ -55,6 +74,9 @@ impl Config {
                 commands_forbidden: cli.commands_forbidden,
                 log_dir: cli.log_dir,
                 internal_access_only: cli.internal_access_only,
+                no_root: cli.no_root,
+                no_system_dirs: cli.no_system_dirs,
+                no_unknown_tools: cli.no_unknown_tools,
             })
         }
     }
@@ -69,6 +91,9 @@ impl Config {
             commands_forbidden: yaml.commands_forbidden,
             log_dir: yaml.log_dir,
             internal_access_only: yaml.internal_access_only,
+            no_root: yaml.special_flags.no_root,
+            no_system_dirs: yaml.special_flags.no_system_dirs,
+            no_unknown_tools: yaml.special_flags.no_unknown_tools,
         })
     }
 }

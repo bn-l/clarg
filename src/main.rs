@@ -22,10 +22,13 @@ fn run(cli: Cli) -> Result<Verdict> {
     let config = Config::from_cli(cli)?;
 
     log::info!(
-        "rules: {} blocked file patterns, {} blocked command patterns, internal_only={}",
+        "rules: {} blocked file patterns, {} blocked command patterns, internal_only={}, no_root={}, no_system_dirs={}, no_unknown_tools={}",
         config.block_access_to.len(),
         config.commands_forbidden.len(),
         config.internal_access_only,
+        config.no_root,
+        config.no_system_dirs,
+        config.no_unknown_tools,
     );
 
     // Read stdin
