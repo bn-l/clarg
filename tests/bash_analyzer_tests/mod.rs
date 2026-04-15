@@ -4,6 +4,7 @@ mod download_commands;
 mod eval_and_shell;
 mod exec_commands;
 mod file_commands;
+mod heredocs;
 mod looks_like_path;
 mod redirections;
 mod search_commands;

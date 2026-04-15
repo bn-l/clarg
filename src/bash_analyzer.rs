@@ -197,7 +197,13 @@ pub fn analyze(command: &str, project_root: &Path) -> Option<String> {
 /// original characters, so `raw` strings users see are byte-identical
 /// to what bash would resolve.
 pub fn extract_paths(command: &str) -> Vec<ExtractedPath> {
-    let masked = mask_quoted_braces(command);
+    // Strip heredocs / here-strings from the raw command BEFORE masking so
+    // that `mask_quoted_braces`'s quote-state machine isn't poisoned by
+    // unbalanced quotes inside a literal heredoc body. `strip_heredocs`
+    // also runs again at the top of `extract_paths_recursive` to cover
+    // recursion entry points (`eval "..."`, `bash -c "..."`).
+    let stripped = strip_heredocs(command);
+    let masked = mask_quoted_braces(&stripped);
     let mut paths = Vec::new();
     extract_paths_recursive(&masked, &mut paths, 0);
     let expanded = expand_brace_paths(paths);
@@ -499,6 +505,13 @@ fn extract_paths_recursive(command: &str, paths: &mut Vec<ExtractedPath>, depth:
     if depth > MAX_RECURSION {
         return;
     }
+
+    // Strip heredocs / here-strings here too, not just at the top of
+    // `extract_paths`: `eval` and `bash -c` recurse into us with the
+    // *inner* string (which still contains shell syntax including any
+    // heredoc operators) by calling this function directly.
+    let stripped = strip_heredocs(command);
+    let command = stripped.as_str();
 
     // Collect redirection targets (quote-aware; handles `> "/tmp/out.txt"`,
     // `> '/tmp/out side.txt'`, etc.).
@@ -975,6 +988,474 @@ fn extract_sed_paths(args: &[String], paths: &mut Vec<ExtractedPath>) {
         }
         i += 1;
     }
+}
+
+// ============================================================================
+// Heredoc / here-string scanning (quote-aware)
+// ============================================================================
+//
+// Bash heredocs (`<<DELIM`, `<<-DELIM`, `<<'DELIM'`, `<<"DELIM"`) and
+// here-strings (`<<<word`) are literal stdin payloads — their bodies
+// must NOT be scanned as shell syntax. Without this pass,
+// `find_redirections` and `split_shell_operators` would see body
+// characters like `>` or `|` and misinterpret them as operators,
+// producing false positives such as a markdown blockquote `> /` in a
+// README body firing the `no_root` rule.
+//
+// Design:
+//   * Walk the command string with the same quote-state machine as
+//     `find_redirections`.
+//   * At each unquoted `<<`, record an op span covering only the
+//     `<<[-]DELIM` operator, and queue a pending heredoc. Same-line
+//     content after the operator is intentionally NOT stripped, so
+//     valid shell like `cat <<EOF > /tmp/out` still has its `>`
+//     redirection picked up downstream.
+//   * At each unquoted newline, drain pending heredocs in FIFO order.
+//     Each body span runs from just after the newline through the
+//     closing-delimiter line (inclusive of its trailing newline).
+//     For `<<-`, leading tabs on the candidate line are stripped
+//     before comparison.
+//   * At each unquoted `<<<` (here-string), strip the operator AND
+//     the one shell token that follows (bareword or quoted).
+//   * Unclosed heredocs strip through end-of-input (fail-closed: we
+//     don't scan content we can't reliably bound).
+
+/// One byte span to be removed by `strip_heredocs`.
+#[derive(Debug, Clone)]
+pub struct HeredocSpan {
+    pub start: usize,
+    pub end: usize,
+}
+
+struct PendingHeredoc {
+    delim: String,
+    strip_tabs: bool,
+}
+
+/// Walk `cmd` and return the byte spans corresponding to heredoc
+/// operators, heredoc bodies (including the closing delimiter line),
+/// and here-string operator+token pairs. Spans are returned in
+/// ascending start-offset order and are pairwise disjoint.
+pub fn find_heredoc_spans(cmd: &str) -> Vec<HeredocSpan> {
+    let bytes = cmd.as_bytes();
+    let mut out: Vec<HeredocSpan> = Vec::new();
+    let mut i = 0;
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut escape_next = false;
+    let mut pending: Vec<PendingHeredoc> = Vec::new();
+
+    while i < bytes.len() {
+        let b = bytes[i];
+
+        if escape_next {
+            escape_next = false;
+            i = advance_char(bytes, i);
+            continue;
+        }
+        if b == b'\\' && !in_single {
+            escape_next = true;
+            i += 1;
+            continue;
+        }
+        if b == b'\'' && !in_double {
+            in_single = !in_single;
+            i += 1;
+            continue;
+        }
+        if b == b'"' && !in_single {
+            in_double = !in_double;
+            i += 1;
+            continue;
+        }
+        if in_single || in_double {
+            i = advance_char(bytes, i);
+            continue;
+        }
+
+        // Newline outside quotes: drain any pending heredoc bodies.
+        if b == b'\n' && !pending.is_empty() {
+            i += 1;
+            for heredoc in std::mem::take(&mut pending) {
+                let body_start = i;
+                let mut line_start = i;
+                let body_end;
+                loop {
+                    let mut line_end = line_start;
+                    while line_end < bytes.len() && bytes[line_end] != b'\n' {
+                        line_end += 1;
+                    }
+                    let line = &cmd[line_start..line_end];
+                    let candidate: &str = if heredoc.strip_tabs {
+                        line.trim_start_matches('\t')
+                    } else {
+                        line
+                    };
+                    if candidate == heredoc.delim {
+                        body_end = if line_end < bytes.len() {
+                            line_end + 1
+                        } else {
+                            line_end
+                        };
+                        break;
+                    }
+                    if line_end >= bytes.len() {
+                        // Unclosed heredoc — fail closed by consuming
+                        // everything to end of input.
+                        body_end = bytes.len();
+                        break;
+                    }
+                    line_start = line_end + 1;
+                }
+                out.push(HeredocSpan {
+                    start: body_start,
+                    end: body_end,
+                });
+                i = body_end;
+            }
+            continue;
+        }
+
+        if b == b'<' && i + 1 < bytes.len() && bytes[i + 1] == b'<' {
+            // `<<<` is a here-string; strip operator + one token.
+            if i + 2 < bytes.len() && bytes[i + 2] == b'<' {
+                let op_start = i;
+                let mut j = i + 3;
+                while j < bytes.len() && (bytes[j] == b' ' || bytes[j] == b'\t') {
+                    j += 1;
+                }
+                let end = if j >= bytes.len() {
+                    j
+                } else {
+                    parse_hs_token_end(cmd, j)
+                };
+                out.push(HeredocSpan {
+                    start: op_start,
+                    end,
+                });
+                i = end;
+                continue;
+            }
+
+            // Heredoc: `<<[-]DELIM` (DELIM may be quoted).
+            let op_start = i;
+            let mut j = i + 2;
+            let strip_tabs = j < bytes.len() && bytes[j] == b'-';
+            if strip_tabs {
+                j += 1;
+            }
+            while j < bytes.len() && (bytes[j] == b' ' || bytes[j] == b'\t') {
+                j += 1;
+            }
+            let (delim_end, delim) = match parse_heredoc_delim(cmd, j) {
+                Some(v) => v,
+                None => {
+                    // Malformed `<<` with no parseable delimiter: skip
+                    // the operator and let the rest of the scanner
+                    // proceed without queuing a heredoc.
+                    i += 2;
+                    continue;
+                }
+            };
+            out.push(HeredocSpan {
+                start: op_start,
+                end: delim_end,
+            });
+            pending.push(PendingHeredoc { delim, strip_tabs });
+            i = delim_end;
+            continue;
+        }
+
+        i = advance_char(bytes, i);
+    }
+
+    out
+}
+
+/// Step `i` forward by one full UTF-8 character.
+fn advance_char(bytes: &[u8], i: usize) -> usize {
+    if i >= bytes.len() {
+        return i;
+    }
+    let b = bytes[i];
+    if b < 0x80 {
+        i + 1
+    } else {
+        i + utf8_char_len(b)
+    }
+}
+
+/// Parse a heredoc delimiter word starting at `start` and return the
+/// byte offset just past the word together with the delimiter text
+/// after bash-style quote removal.
+///
+/// The delimiter is a shell word that may freely mix bare characters,
+/// `'single'`-quoted segments, `"double"`-quoted segments, and
+/// backslash-escaped characters — bash quote-removes all of them
+/// before matching the closing line. Examples that all resolve to the
+/// literal `EOF`:
+///
+///   * `<<EOF`           — bareword
+///   * `<<'EOF'`         — wholly single-quoted
+///   * `<<"EOF"`         — wholly double-quoted
+///   * `<<\EOF`          — escaped first char
+///   * `<<E"OF"`         — bare `E` + double-quoted `OF`
+///   * `<<E'O'F`         — bare-quoted-bare mix
+///
+/// The word terminates at the first unquoted whitespace or shell
+/// metacharacter (`;`, `|`, `&`, `<`, `>`, `(`, `)`, `` ` ``, `#`,
+/// `\n`). Parameter / command substitutions inside the delimiter
+/// (`$VAR`, `$(...)`, `` `...` ``) are NOT resolved — they are copied
+/// literally, which means a delim like `<<EOF$VAR` will not match a
+/// closing `EOF` line. That's a soundness concern for security
+/// (bash *would* expand and close), but `$VAR`/`$(...)` in a heredoc
+/// delim is a deliberately obscure form; we accept the conservative
+/// strip-to-EOF behavior here and rely on the caller to never trust
+/// a strip whose closer wasn't actually matched.
+fn parse_heredoc_delim(cmd: &str, start: usize) -> Option<(usize, String)> {
+    let bytes = cmd.as_bytes();
+    if start >= bytes.len() {
+        return None;
+    }
+    let mut i = start;
+    let mut out = String::new();
+
+    while i < bytes.len() {
+        let b = bytes[i];
+
+        // Unquoted word terminators.
+        if matches!(
+            b,
+            b' ' | b'\t' | b'\n' | b';' | b'|' | b'&' | b'<' | b'>' | b'(' | b')' | b'`' | b'#'
+        ) {
+            break;
+        }
+
+        // Single-quoted segment: contents are pure literal.
+        if b == b'\'' {
+            i += 1;
+            let q_start = i;
+            while i < bytes.len() && bytes[i] != b'\'' {
+                i = advance_char(bytes, i);
+            }
+            out.push_str(&cmd[q_start..i]);
+            if i < bytes.len() {
+                i += 1;
+            }
+            continue;
+        }
+
+        // Double-quoted segment: `\` only escapes a small set; rest is
+        // literal. We don't expand `$VAR` here (see fn-doc above).
+        if b == b'"' {
+            i += 1;
+            let mut chunk_start = i;
+            while i < bytes.len() && bytes[i] != b'"' {
+                if bytes[i] == b'\\' && i + 1 < bytes.len() {
+                    out.push_str(&cmd[chunk_start..i]);
+                    i += 1;
+                    let next = bytes[i];
+                    let clen = if next < 0x80 { 1 } else { utf8_char_len(next) };
+                    let end = (i + clen).min(bytes.len());
+                    out.push_str(&cmd[i..end]);
+                    i = end;
+                    chunk_start = i;
+                } else {
+                    i = advance_char(bytes, i);
+                }
+            }
+            out.push_str(&cmd[chunk_start..i]);
+            if i < bytes.len() {
+                i += 1;
+            }
+            continue;
+        }
+
+        // Backslash-escape outside any quotes.
+        if b == b'\\' && i + 1 < bytes.len() {
+            i += 1;
+            let next = bytes[i];
+            let clen = if next < 0x80 { 1 } else { utf8_char_len(next) };
+            let end = (i + clen).min(bytes.len());
+            out.push_str(&cmd[i..end]);
+            i = end;
+            continue;
+        }
+
+        // Bare character.
+        let clen = if b < 0x80 { 1 } else { utf8_char_len(b) };
+        let end = (i + clen).min(bytes.len());
+        out.push_str(&cmd[i..end]);
+        i = end;
+    }
+
+    if out.is_empty() {
+        None
+    } else {
+        Some((i, out))
+    }
+}
+
+/// Find the byte offset just past the end of a here-string token
+/// beginning at `start`.
+///
+/// A here-string takes a full shell word, so the parser must keep
+/// going past whitespace and shell metachars whenever they appear
+/// inside an active sub-context:
+///
+///   * `'...'`            — single-quoted segment (literal)
+///   * `"..."`            — double-quoted segment (`$()`/`${}`/`` ` ``
+///                          remain active inside)
+///   * `$(...)` (nested)  — command substitution; tracks balanced `()`
+///                          and quote toggles within
+///   * `${...}` (nested)  — parameter expansion; tracks balanced `{}`
+///   * `` `...` ``        — backtick command substitution
+///   * `\c`               — backslash-escape of next char
+///
+/// Top-level termination is the same set of unquoted shell metachars
+/// used elsewhere in this module.
+///
+/// Without this, a here-string like `cat <<< $(echo /etc/passwd)`
+/// would be terminated at `(` and the trailing `/etc/passwd)` would
+/// re-tokenize into a spurious external file path.
+fn parse_hs_token_end(cmd: &str, start: usize) -> usize {
+    let bytes = cmd.as_bytes();
+    let mut i = start;
+    let mut in_single = false;
+    let mut in_double = false;
+    let mut paren_depth: usize = 0;
+    let mut brace_depth: usize = 0;
+    let mut backtick_open = false;
+    let mut escape_next = false;
+
+    while i < bytes.len() {
+        let b = bytes[i];
+
+        if escape_next {
+            escape_next = false;
+            i = advance_char(bytes, i);
+            continue;
+        }
+        if b == b'\\' && !in_single {
+            escape_next = true;
+            i += 1;
+            continue;
+        }
+
+        // Single-quoted is literal — only `'` exits.
+        if in_single {
+            if b == b'\'' {
+                in_single = false;
+                i += 1;
+                continue;
+            }
+            i = advance_char(bytes, i);
+            continue;
+        }
+        if b == b'\'' && !in_double {
+            in_single = true;
+            i += 1;
+            continue;
+        }
+
+        // Double-quote toggles. Inside double-quotes, `$()` / `${}` /
+        // backticks remain active.
+        if b == b'"' {
+            in_double = !in_double;
+            i += 1;
+            continue;
+        }
+
+        // Open a `$()` command substitution.
+        if b == b'$' && i + 1 < bytes.len() && bytes[i + 1] == b'(' {
+            paren_depth += 1;
+            i += 2;
+            continue;
+        }
+        // Open a `${}` parameter expansion.
+        if b == b'$' && i + 1 < bytes.len() && bytes[i + 1] == b'{' {
+            brace_depth += 1;
+            i += 2;
+            continue;
+        }
+        // Backtick command substitution toggles.
+        if b == b'`' {
+            backtick_open = !backtick_open;
+            i += 1;
+            continue;
+        }
+
+        // Track nested `()` inside an active `$()`.
+        if paren_depth > 0 {
+            if b == b'(' {
+                paren_depth += 1;
+                i += 1;
+                continue;
+            }
+            if b == b')' {
+                paren_depth -= 1;
+                i += 1;
+                continue;
+            }
+        }
+        // Track nested `{}` inside an active `${}`.
+        if brace_depth > 0 {
+            if b == b'{' {
+                brace_depth += 1;
+                i += 1;
+                continue;
+            }
+            if b == b'}' {
+                brace_depth -= 1;
+                i += 1;
+                continue;
+            }
+        }
+
+        // Inside any active sub-context, swallow the byte without
+        // terminating on metachars.
+        if in_double || backtick_open || paren_depth > 0 || brace_depth > 0 {
+            i = advance_char(bytes, i);
+            continue;
+        }
+
+        // Top-level metachar terminates the word.
+        if matches!(
+            b,
+            b' ' | b'\t' | b'\n' | b';' | b'|' | b'&' | b'<' | b'>' | b'(' | b')' | b'#'
+        ) {
+            break;
+        }
+
+        i = advance_char(bytes, i);
+    }
+    i
+}
+
+/// Replace every span returned by `find_heredoc_spans` with a single
+/// space, preserving token boundaries on either side. Returns the
+/// original string unchanged when no heredoc / here-string is present.
+pub fn strip_heredocs(cmd: &str) -> String {
+    if !cmd.contains("<<") {
+        return cmd.to_string();
+    }
+    let spans = find_heredoc_spans(cmd);
+    if spans.is_empty() {
+        return cmd.to_string();
+    }
+    let mut out = String::with_capacity(cmd.len());
+    let mut cursor = 0;
+    for span in &spans {
+        if span.start > cursor {
+            out.push_str(&cmd[cursor..span.start]);
+        }
+        out.push(' ');
+        cursor = span.end;
+    }
+    if cursor < cmd.len() {
+        out.push_str(&cmd[cursor..]);
+    }
+    out
 }
 
 // ============================================================================
