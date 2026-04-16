@@ -32,6 +32,15 @@ pub const SYSTEM_DIRS: &[&str] = &[
     "/Network",
 ];
 
+/// Exceptions carved out of `SYSTEM_DIRS`: paths that would otherwise
+/// match a listed prefix but are allowed through.
+///
+/// * `/private/tmp` — on macOS, `/tmp` is a symlink to `/private/tmp`, so
+///   canonicalized or explicitly-written paths land here. `/tmp` itself
+///   is intentionally excluded from `SYSTEM_DIRS`, so allowing
+///   `/private/tmp` preserves that intent.
+pub const SYSTEM_DIRS_EXCEPTIONS: &[&str] = &["/private/tmp"];
+
 /// Rule for `no_root` and `no_system_dirs` special flags.
 ///
 /// * `no_root` — blocks any path that resolves (lexically, via
@@ -126,6 +135,13 @@ impl SystemPathsRule {
 }
 
 fn check_no_system_dirs(resolved: &Path) -> Option<String> {
+    // Allow-list: exceptions win over any matching SYSTEM_DIRS prefix.
+    for exc in SYSTEM_DIRS_EXCEPTIONS {
+        let exc_path = Path::new(exc);
+        if resolved == exc_path || resolved.starts_with(exc_path) {
+            return None;
+        }
+    }
     for dir in SYSTEM_DIRS {
         let dir_path = Path::new(dir);
         // `starts_with` on `Path` is component-wise, so `/usr2/bin`

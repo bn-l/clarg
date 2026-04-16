@@ -735,6 +735,19 @@ fn test_bash_no_system_dirs_allows_dd_if_dev_null_to_local() {
 }
 
 #[test]
+fn test_bash_no_system_dirs_allows_private_tmp() {
+    // /private/tmp is the macOS canonicalization target of /tmp and is
+    // an explicit SYSTEM_DIRS exception.
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_system_dirs_config(), tmp.path()).unwrap();
+    let input = make_bash_input("cat /private/tmp/notes.txt", tmp.path().to_path_buf());
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => {}
+        Verdict::Deny(reason) => panic!("expected allow, got deny: {}", reason),
+    }
+}
+
+#[test]
 fn test_bash_no_system_dirs_blocks_unknown_cmd_flag_value() {
     // `mytool --config=/etc/passwd` — `--flag=value` embedded path.
     let tmp = TempDir::new().unwrap();

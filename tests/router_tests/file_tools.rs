@@ -609,6 +609,58 @@ fn test_edit_no_system_dirs_allows_tmp_when_only_system_flag_active() {
 }
 
 #[test]
+fn test_edit_no_system_dirs_allows_private_tmp() {
+    // /private/tmp is the canonical target of /tmp on macOS and is an
+    // explicit exception to the SYSTEM_DIRS `/private` prefix.
+    let tmp = TempDir::new().unwrap();
+    let config = Config {
+        block_access_to: vec![],
+        commands_forbidden: vec![],
+        log_dir: None,
+        internal_access_only: false,
+        no_root: false,
+        no_system_dirs: true,
+        no_unknown_tools: false,
+    };
+    let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
+    let input = make_file_tool_input(
+        "Edit",
+        "/private/tmp/scratch.txt",
+        tmp.path().to_path_buf(),
+    );
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => {}
+        Verdict::Deny(reason) => panic!("expected allow, got deny: {}", reason),
+    }
+}
+
+#[test]
+fn test_read_no_system_dirs_blocks_private_etc() {
+    // Exception is scoped to /private/tmp only; /private/etc still blocks.
+    let tmp = TempDir::new().unwrap();
+    let config = Config {
+        block_access_to: vec![],
+        commands_forbidden: vec![],
+        log_dir: None,
+        internal_access_only: false,
+        no_root: false,
+        no_system_dirs: true,
+        no_unknown_tools: false,
+    };
+    let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
+    let input = make_file_tool_input("Read", "/private/etc/hosts", tmp.path().to_path_buf());
+
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(reason) => {
+            assert!(reason.contains("no_system_dirs"), "got: {}", reason);
+            assert!(reason.contains("/private"), "got: {}", reason);
+        }
+    }
+}
+
+#[test]
 fn test_path_tool_with_only_system_paths_rule_does_not_short_circuit_allow() {
     // Regression guard: evaluate_path_tool's early-return must include
     // the system_paths check; otherwise turning on just `no_root` alone

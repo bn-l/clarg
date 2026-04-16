@@ -123,6 +123,33 @@ fn test_no_system_dirs_does_not_block_excluded_dirs() {
 }
 
 #[test]
+fn test_no_system_dirs_allows_private_tmp_exception() {
+    // /private/tmp (and descendants) is an explicit exception — /tmp
+    // is a symlink to /private/tmp on macOS and must work.
+    let r = rule();
+    for path in &[
+        "/private/tmp",
+        "/private/tmp/",
+        "/private/tmp/scratch.txt",
+        "/private/tmp/nested/dir/file",
+    ] {
+        assert!(
+            r.check(Path::new(path)).is_none(),
+            "expected /private/tmp exception '{}' to NOT be blocked",
+            path
+        );
+    }
+    // Sibling children of /private must still block.
+    for path in &["/private", "/private/etc/hosts", "/private/var/log/x"] {
+        assert!(
+            r.check(Path::new(path)).is_some(),
+            "expected non-tmp /private path '{}' to still be blocked",
+            path
+        );
+    }
+}
+
+#[test]
 fn test_no_system_dirs_with_no_root_flag_blocks_root_too() {
     // Combined rule: bare `/` is caught by no_root, /etc by no_system_dirs.
     let r = SystemPathsRule::new(
