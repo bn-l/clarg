@@ -150,6 +150,25 @@ fn test_no_system_dirs_allows_private_tmp_exception() {
 }
 
 #[test]
+fn test_no_system_dirs_allows_usr_bin_log_exception() {
+    // /usr/bin/log (macOS unified logging CLI) is an explicit exception.
+    let r = rule();
+    assert!(
+        r.check(Path::new("/usr/bin/log")).is_none(),
+        "expected /usr/bin/log to NOT be blocked"
+    );
+    // Lookalikes that share a string prefix but differ in the final
+    // component must still block (component-wise starts_with).
+    for path in &["/usr/bin/login", "/usr/bin/logger"] {
+        assert!(
+            r.check(Path::new(path)).is_some(),
+            "expected lookalike '{}' to still be blocked",
+            path
+        );
+    }
+}
+
+#[test]
 fn test_no_system_dirs_with_no_root_flag_blocks_root_too() {
     // Combined rule: bare `/` is caught by no_root, /etc by no_system_dirs.
     let r = SystemPathsRule::new(

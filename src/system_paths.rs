@@ -39,7 +39,9 @@ pub const SYSTEM_DIRS: &[&str] = &[
 ///   canonicalized or explicitly-written paths land here. `/tmp` itself
 ///   is intentionally excluded from `SYSTEM_DIRS`, so allowing
 ///   `/private/tmp` preserves that intent.
-pub const SYSTEM_DIRS_EXCEPTIONS: &[&str] = &["/private/tmp"];
+/// * `/usr/bin/log` — macOS unified logging CLI; commonly invoked for
+///   diagnostics and considered safe under `no_system_dirs`.
+pub const SYSTEM_DIRS_EXCEPTIONS: &[&str] = &["/private/tmp", "/usr/bin/log"];
 
 /// Rule for `no_root` and `no_system_dirs` special flags.
 ///
