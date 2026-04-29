@@ -798,9 +798,139 @@ fn test_bash_no_system_dirs_blocks_python_inline_etc_passwd() {
 }
 
 #[test]
+fn test_bash_no_system_dirs_blocks_python_inline_path_after_comment_quote() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_system_dirs_config(), tmp.path()).unwrap();
+    let input = make_bash_input(
+        "python -c \"# ' comment\nopen('/etc/passwd')\"",
+        tmp.path().to_path_buf(),
+    );
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(reason) => assert!(reason.contains("/etc"), "got: {}", reason),
+    }
+}
+
+#[test]
+fn test_bash_no_system_dirs_ignores_python_inline_comment_path() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_system_dirs_config(), tmp.path()).unwrap();
+    let input = make_bash_input(
+        "python -c \"# open('/etc/passwd')\nprint(1)\"",
+        tmp.path().to_path_buf(),
+    );
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => {}
+        Verdict::Deny(reason) => panic!("expected allow, got deny: {}", reason),
+    }
+}
+
+#[test]
+fn test_bash_no_system_dirs_blocks_ruby_percent_q_inline_path() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_system_dirs_config(), tmp.path()).unwrap();
+    let input = make_bash_input(
+        r#"ruby -e "File.read(%q{/etc/passwd})""#,
+        tmp.path().to_path_buf(),
+    );
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(reason) => assert!(reason.contains("/etc"), "got: {}", reason),
+    }
+}
+
+#[test]
+fn test_bash_no_system_dirs_blocks_perl_q_inline_path() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_system_dirs_config(), tmp.path()).unwrap();
+    let input = make_bash_input(
+        r#"perl -e "open my $fh, q{/etc/passwd}""#,
+        tmp.path().to_path_buf(),
+    );
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(reason) => assert!(reason.contains("/etc"), "got: {}", reason),
+    }
+}
+
+#[test]
+fn test_bash_no_system_dirs_blocks_lua_long_string_inline_path() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_system_dirs_config(), tmp.path()).unwrap();
+    let input = make_bash_input(
+        r#"lua -e "io.open([[/etc/passwd]])""#,
+        tmp.path().to_path_buf(),
+    );
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(reason) => assert!(reason.contains("/etc"), "got: {}", reason),
+    }
+}
+
+#[test]
+fn test_bash_no_system_dirs_blocks_node_inline_string_etc_passwd() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_system_dirs_config(), tmp.path()).unwrap();
+    let input = make_bash_input(
+        r#"node -e "require('fs').readFileSync('/etc/passwd')""#,
+        tmp.path().to_path_buf(),
+    );
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(reason) => assert!(reason.contains("/etc"), "got: {}", reason),
+    }
+}
+
+#[test]
+fn test_bash_no_root_allows_node_inline_regex_literal() {
+    // Regression guard: JS regex delimiters are not filesystem paths.
+    // The old whole-source scanner extracted `/.` from `/.{0,100}.../gs`,
+    // which normalized to `/` and tripped no_root.
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_root_config(), tmp.path()).unwrap();
+    let input = make_bash_input(
+        r#"node -e "const content = require('fs').readFileSync('/Users/bml/file.js', 'utf8'); const regex = /.{0,100}onThemeChange.{0,500}/gs; console.log(content.match(regex));" 2>/dev/null"#,
+        tmp.path().to_path_buf(),
+    );
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => {}
+        Verdict::Deny(reason) => panic!("expected allow, got deny: {}", reason),
+    }
+}
+
+#[test]
+fn test_bash_no_system_dirs_allows_node_inline_regex_literal_etc_text() {
+    // A regex pattern that mentions /etc is not a filesystem access.
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_system_dirs_config(), tmp.path()).unwrap();
+    let input = make_bash_input(
+        r#"node -e "const regex = /etc\/passwd/; console.log(regex.test('etc/passwd'))""#,
+        tmp.path().to_path_buf(),
+    );
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => {}
+        Verdict::Deny(reason) => panic!("expected allow, got deny: {}", reason),
+    }
+}
+
+#[test]
+fn test_bash_no_system_dirs_still_blocks_node_string_after_regex_with_quotes() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_system_dirs_config(), tmp.path()).unwrap();
+    let input = make_bash_input(
+        r#"node -e "const regex = /['\"]ignored/; require('fs').readFileSync('/etc/passwd')""#,
+        tmp.path().to_path_buf(),
+    );
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
+        Verdict::Deny(reason) => assert!(reason.contains("/etc"), "got: {}", reason),
+    }
+}
+
+#[test]
 fn test_bash_no_root_blocks_python_inline_bare_root() {
-    // Critical trap: PATH_IN_CODE_RE alone misses bare `/` — the
-    // BARE_ROOT_IN_CODE_RE addition must fire on `os.chdir('/')`.
+    // Critical trap: PATH_IN_CODE_RE alone misses bare `/`, so the
+    // string-literal bare-root guard must fire on `os.chdir('/')`.
     let tmp = TempDir::new().unwrap();
     let ruleset = RuleSet::build(&no_root_config(), tmp.path()).unwrap();
     let input = make_bash_input(
@@ -809,6 +939,17 @@ fn test_bash_no_root_blocks_python_inline_bare_root() {
     );
     match ruleset.evaluate(&input) {
         Verdict::Allow => panic!("expected deny — bare `/` in inline code must be caught"),
+        Verdict::Deny(reason) => assert!(reason.contains("no_root"), "got: {}", reason),
+    }
+}
+
+#[test]
+fn test_bash_no_root_blocks_ruby_percent_q_inline_bare_root() {
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_root_config(), tmp.path()).unwrap();
+    let input = make_bash_input(r#"ruby -e "Dir.chdir(%q{/})""#, tmp.path().to_path_buf());
+    match ruleset.evaluate(&input) {
+        Verdict::Allow => panic!("expected deny"),
         Verdict::Deny(reason) => assert!(reason.contains("no_root"), "got: {}", reason),
     }
 }

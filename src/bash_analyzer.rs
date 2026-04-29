@@ -53,7 +53,7 @@ const INLINE_CODE_INTERPRETERS: &[&str] = &[
 /// Download commands where specific flags point to output paths.
 const DOWNLOAD_COMMANDS: &[&str] = &["curl", "wget"];
 
-/// Regex to extract absolute paths and home paths from inline code strings.
+/// Regex to extract absolute paths and home paths from the inline-code scan surface.
 static PATH_IN_CODE_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(?:/[a-zA-Z0-9_.@-][a-zA-Z0-9_.@/-]*|~/[a-zA-Z0-9_.@/-]+|\$HOME/[a-zA-Z0-9_.@/-]+)"#).unwrap()
 });
@@ -208,6 +208,402 @@ pub fn extract_paths(command: &str) -> Vec<ExtractedPath> {
     extract_paths_recursive(&masked, &mut paths, 0);
     let expanded = expand_brace_paths(paths);
     expanded.into_iter().map(unmask_extracted_path).collect()
+}
+
+/// Extract path-like references from inline interpreter source.
+///
+/// Static verification of arbitrary inline source remains impossible, so
+/// `InlineCodeExecution` still denies under internal-only semantics. For the
+/// narrower system-path and blocked-file rules, we scan a masked source surface:
+/// comments and regex literals are blanked out, while strings and other literal
+/// syntaxes stay visible. That catches obvious literal paths without confusing
+/// JavaScript regex syntax like `/.{0,100}foo/g` with filesystem paths.
+fn extract_inline_code_refs(
+    code_arg: &str,
+    interpreter: &str,
+    flag: &str,
+    paths: &mut Vec<ExtractedPath>,
+) {
+    let scan_code = unmask_braces(code_arg);
+    let scan_surface = inline_code_path_scan_surface(&scan_code, interpreter);
+
+    for mat in PATH_IN_CODE_RE.find_iter(&scan_surface) {
+        push_inline_code_ref(mat.as_str(), interpreter, flag, code_arg, paths);
+    }
+
+    // PATH_IN_CODE_RE requires a character after `/`, so preserve the
+    // bare-root guard for string literals like `os.chdir("/")`.
+    for cap in BARE_ROOT_IN_CODE_RE.captures_iter(&scan_surface) {
+        push_inline_code_ref(cap.get(1).unwrap().as_str(), interpreter, flag, code_arg, paths);
+    }
+    if contains_bare_root_delimited_literal(&scan_surface, interpreter) {
+        push_inline_code_ref("/", interpreter, flag, code_arg, paths);
+    }
+}
+
+fn push_inline_code_ref(
+    raw: &str,
+    interpreter: &str,
+    flag: &str,
+    code_arg: &str,
+    paths: &mut Vec<ExtractedPath>,
+) {
+    if raw.starts_with("/dev/") {
+        return;
+    }
+
+    paths.push(ExtractedPath {
+        raw: raw.to_string(),
+        context: PathContext::InlineCodeRef {
+            interpreter: interpreter.to_string(),
+            flag: flag.to_string(),
+            code_snippet: code_arg.to_string(),
+        },
+    });
+}
+
+fn inline_code_path_scan_surface(code: &str, interpreter: &str) -> String {
+    let bytes = code.as_bytes();
+    let mut out = bytes.to_vec();
+    let mut i = 0;
+
+    while i < bytes.len() {
+        if let Some(next) = skip_nonstandard_string(bytes, interpreter, i) {
+            i = next;
+            continue;
+        }
+
+        if let Some(next) = skip_ordinary_string(bytes, i) {
+            i = next;
+            continue;
+        }
+
+        if let Some(next) = skip_comment(bytes, interpreter, i) {
+            mask_inline_code_range(&mut out, i, next);
+            i = next;
+            continue;
+        }
+
+        if should_skip_regex_literal(bytes, interpreter, i) {
+            if let Some(next) = skip_regex_literal(bytes, i) {
+                mask_inline_code_range(&mut out, i, next);
+                i = next;
+                continue;
+            }
+        }
+
+        i += 1;
+    }
+
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn skip_nonstandard_string(bytes: &[u8], interpreter: &str, i: usize) -> Option<usize> {
+    if interpreter == "ruby" && starts_ruby_percent_string(bytes, i) {
+        return delimited_literal_end(bytes, i + 2);
+    }
+
+    if interpreter == "perl" {
+        if let Some(delimiter_idx) = perl_q_delimiter_index(bytes, i) {
+            return delimited_literal_end(bytes, delimiter_idx);
+        }
+    }
+
+    if interpreter == "lua" {
+        return skip_lua_long_bracket(bytes, i);
+    }
+
+    None
+}
+
+fn skip_ordinary_string(bytes: &[u8], start: usize) -> Option<usize> {
+    let quote = *bytes.get(start)?;
+    if !matches!(quote, b'\'' | b'"' | b'`') {
+        return None;
+    }
+
+    let triple = quote != b'`'
+        && start + 2 < bytes.len()
+        && bytes[start + 1] == quote
+        && bytes[start + 2] == quote;
+    let mut i = if triple { start + 3 } else { start + 1 };
+
+    if triple {
+        while i + 2 < bytes.len() {
+            if bytes[i] == b'\\' {
+                i = (i + 2).min(bytes.len());
+                continue;
+            }
+            if bytes[i] == quote && bytes[i + 1] == quote && bytes[i + 2] == quote {
+                return Some(i + 3);
+            }
+            i += 1;
+        }
+    } else {
+        while i < bytes.len() {
+            if bytes[i] == b'\\' {
+                i = (i + 2).min(bytes.len());
+                continue;
+            }
+            if bytes[i] == quote {
+                return Some(i + 1);
+            }
+            i += 1;
+        }
+    }
+
+    None
+}
+
+fn skip_comment(bytes: &[u8], interpreter: &str, start: usize) -> Option<usize> {
+    let b = *bytes.get(start)?;
+
+    if b == b'#' && matches!(interpreter, "python" | "python3" | "ruby" | "perl" | "php") {
+        return Some(line_end(bytes, start));
+    }
+
+    if matches!(interpreter, "node" | "php") {
+        if bytes.get(start..start + 2) == Some(b"//") {
+            return Some(line_end(bytes, start));
+        }
+        if bytes.get(start..start + 2) == Some(b"/*") {
+            return Some(block_comment_end(bytes, start + 2, b"*/"));
+        }
+    }
+
+    if interpreter == "lua" && bytes.get(start..start + 2) == Some(b"--") {
+        if bytes.get(start + 2) == Some(&b'[') {
+            if let Some(end) = skip_lua_long_bracket(bytes, start + 2) {
+                return Some(end);
+            }
+        }
+        return Some(line_end(bytes, start));
+    }
+
+    None
+}
+
+fn line_end(bytes: &[u8], start: usize) -> usize {
+    let mut i = start;
+    while i < bytes.len() && bytes[i] != b'\n' {
+        i += 1;
+    }
+    i
+}
+
+fn block_comment_end(bytes: &[u8], mut i: usize, terminator: &[u8]) -> usize {
+    while i + terminator.len() <= bytes.len() {
+        if bytes.get(i..i + terminator.len()) == Some(terminator) {
+            return i + terminator.len();
+        }
+        i += 1;
+    }
+    bytes.len()
+}
+
+fn skip_lua_long_bracket(bytes: &[u8], start: usize) -> Option<usize> {
+    lua_long_bracket_parts(bytes, start).map(|(_, _, end)| end)
+}
+
+fn contains_bare_root_delimited_literal(scan_surface: &str, interpreter: &str) -> bool {
+    let bytes = scan_surface.as_bytes();
+    let mut i = 0;
+
+    while i < bytes.len() {
+        if matches!(interpreter, "ruby" | "perl") {
+            if starts_ruby_percent_string(bytes, i) {
+                if delimited_literal_is_bare_root(bytes, i + 2) {
+                    return true;
+                }
+            }
+
+            if interpreter == "perl" {
+                if let Some(delim_idx) = perl_q_delimiter_index(bytes, i) {
+                    if delimited_literal_is_bare_root(bytes, delim_idx) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        if interpreter == "lua" {
+            if let Some((content_start, content_end, literal_end)) = lua_long_bracket_parts(bytes, i) {
+                if &bytes[content_start..content_end] == b"/" {
+                    return true;
+                }
+                i = literal_end;
+                continue;
+            }
+        }
+
+        i += 1;
+    }
+
+    false
+}
+
+fn starts_ruby_percent_string(bytes: &[u8], i: usize) -> bool {
+    matches!(bytes.get(i..i + 2), Some(b"%q" | b"%Q"))
+}
+
+fn perl_q_delimiter_index(bytes: &[u8], i: usize) -> Option<usize> {
+    if !is_token_boundary(bytes, i) || bytes.get(i) != Some(&b'q') {
+        return None;
+    }
+
+    let mut j = i + 1;
+    if bytes.get(j) == Some(&b'q') {
+        j += 1;
+    } else if bytes.get(j) == Some(&b'r') {
+        return None;
+    }
+    while bytes.get(j).is_some_and(|b| b.is_ascii_whitespace()) {
+        j += 1;
+    }
+    bytes.get(j).map(|_| j)
+}
+
+fn is_token_boundary(bytes: &[u8], i: usize) -> bool {
+    i == 0 || !bytes[i - 1].is_ascii_alphanumeric() && bytes[i - 1] != b'_'
+}
+
+fn delimited_literal_is_bare_root(bytes: &[u8], delimiter_idx: usize) -> bool {
+    if let Some((content_start, content_end)) = delimited_literal_bounds(bytes, delimiter_idx) {
+        return &bytes[content_start..content_end] == b"/";
+    }
+    false
+}
+
+fn delimited_literal_end(bytes: &[u8], delimiter_idx: usize) -> Option<usize> {
+    delimited_literal_bounds(bytes, delimiter_idx).map(|(_, content_end)| content_end + 1)
+}
+
+fn delimited_literal_bounds(bytes: &[u8], delimiter_idx: usize) -> Option<(usize, usize)> {
+    let open = *bytes.get(delimiter_idx)?;
+    let close = match open {
+        b'{' => b'}',
+        b'(' => b')',
+        b'[' => b']',
+        b'<' => b'>',
+        b if b.is_ascii_whitespace() || b.is_ascii_alphanumeric() => return None,
+        b => b,
+    };
+    let content_start = delimiter_idx + 1;
+    let mut i = content_start;
+
+    while i < bytes.len() {
+        if bytes[i] == b'\\' {
+            i = (i + 2).min(bytes.len());
+            continue;
+        }
+        if bytes[i] == close {
+            return Some((content_start, i));
+        }
+        i += 1;
+    }
+
+    None
+}
+
+fn lua_long_bracket_parts(bytes: &[u8], start: usize) -> Option<(usize, usize, usize)> {
+    if bytes.get(start) != Some(&b'[') {
+        return None;
+    }
+
+    let mut i = start + 1;
+    while bytes.get(i) == Some(&b'=') {
+        i += 1;
+    }
+    if bytes.get(i) != Some(&b'[') {
+        return None;
+    }
+    let eq_count = i - start - 1;
+    i += 1;
+    let content_start = i;
+
+    while i < bytes.len() {
+        if bytes[i] == b']' {
+            let mut j = i + 1;
+            let mut n = 0;
+            while n < eq_count && bytes.get(j) == Some(&b'=') {
+                j += 1;
+                n += 1;
+            }
+            if n == eq_count && bytes.get(j) == Some(&b']') {
+                return Some((content_start, i, j + 1));
+            }
+        }
+        i += 1;
+    }
+
+    Some((content_start, bytes.len(), bytes.len()))
+}
+
+fn mask_inline_code_range(out: &mut [u8], start: usize, end: usize) {
+    for b in &mut out[start..end] {
+        if *b != b'\n' && *b != b'\r' {
+            *b = b' ';
+        }
+    }
+}
+
+fn should_skip_regex_literal(bytes: &[u8], interpreter: &str, slash_idx: usize) -> bool {
+    if !matches!(interpreter, "node" | "ruby" | "perl" | "php") {
+        return false;
+    }
+    if bytes.get(slash_idx) != Some(&b'/') || bytes.get(slash_idx + 1) == Some(&b'/') {
+        return false;
+    }
+
+    match previous_non_whitespace_byte(bytes, slash_idx) {
+        None => true,
+        Some(
+            b'=' | b'(' | b'[' | b'{' | b',' | b';' | b':' | b'!' | b'?' | b'&' | b'|'
+            | b'~',
+        ) => true,
+        _ => false,
+    }
+}
+
+fn previous_non_whitespace_byte(bytes: &[u8], idx: usize) -> Option<u8> {
+    let mut i = idx;
+    while i > 0 {
+        i -= 1;
+        if !bytes[i].is_ascii_whitespace() {
+            return Some(bytes[i]);
+        }
+    }
+    None
+}
+
+fn skip_regex_literal(bytes: &[u8], start: usize) -> Option<usize> {
+    let mut i = start + 1;
+    let mut in_class = false;
+
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\\' => i = (i + 2).min(bytes.len()),
+            b'[' if !in_class => {
+                in_class = true;
+                i += 1;
+            }
+            b']' if in_class => {
+                in_class = false;
+                i += 1;
+            }
+            b'/' if !in_class => {
+                i += 1;
+                while i < bytes.len() && bytes[i].is_ascii_alphabetic() {
+                    i += 1;
+                }
+                return Some(i);
+            }
+            b'\n' | b'\r' => return None,
+            _ => i += 1,
+        }
+    }
+
+    None
 }
 
 // ============================================================================
@@ -672,37 +1068,11 @@ fn extract_paths_from_sub_command(sub_cmd: &str, paths: &mut Vec<ExtractedPath>,
                                 code_snippet: code_arg.clone(),
                             },
                         });
-                        // Defense-in-depth: regex-extracted literal paths
-                        // still populate the list so no_root / no_system_dirs /
+                        // Defense-in-depth: literal paths still populate
+                        // the list so no_root / no_system_dirs /
                         // blocked_files fire on obvious external references
                         // even when `-i` is not set.
-                        for mat in PATH_IN_CODE_RE.find_iter(code_arg) {
-                            let path_str = mat.as_str();
-                            if !path_str.starts_with("/dev/") {
-                                paths.push(ExtractedPath {
-                                    raw: path_str.to_string(),
-                                    context: PathContext::InlineCodeRef {
-                                        interpreter: cmd.to_string(),
-                                        flag: args[pos].clone(),
-                                        code_snippet: code_arg.clone(),
-                                    },
-                                });
-                            }
-                        }
-                        // Also catch bare `/` inside quoted string literals,
-                        // which PATH_IN_CODE_RE misses (it requires at least
-                        // one char after the slash).
-                        for cap in BARE_ROOT_IN_CODE_RE.captures_iter(code_arg) {
-                            let slash = cap.get(1).unwrap().as_str().to_string();
-                            paths.push(ExtractedPath {
-                                raw: slash,
-                                context: PathContext::InlineCodeRef {
-                                    interpreter: cmd.to_string(),
-                                    flag: args[pos].clone(),
-                                    code_snippet: code_arg.clone(),
-                                },
-                            });
-                        }
+                        extract_inline_code_refs(code_arg, cmd, &args[pos], paths);
                         return;
                     }
                 }
