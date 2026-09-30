@@ -748,6 +748,37 @@ fn test_bash_no_system_dirs_allows_private_tmp() {
 }
 
 #[test]
+fn test_bash_no_system_dirs_allows_macos_tmpdir() {
+    // Reusing a path printed by `mktemp -d` (macOS `$TMPDIR` lives under
+    // /var/folders) must not trip the SYSTEM_DIRS `/var` prefix.
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_system_dirs_config(), tmp.path()).unwrap();
+    for cmd in &[
+        "ls /var/folders/66/bbm03j656rz04vx9k1r095400000gn/T/tmp.abc123",
+        "echo hi > /private/var/folders/66/bbm03j656rz04vx9k1r095400000gn/T/out.txt",
+        "cp notes.txt /var/tmp/",
+    ] {
+        let input = make_bash_input(cmd, tmp.path().to_path_buf());
+        match ruleset.evaluate(&input) {
+            Verdict::Allow => {}
+            Verdict::Deny(reason) => panic!("expected allow for '{}', got deny: {}", cmd, reason),
+        }
+    }
+}
+
+#[test]
+fn test_bash_no_system_dirs_still_blocks_var_log() {
+    // The temp exceptions must not open up the rest of /var.
+    let tmp = TempDir::new().unwrap();
+    let ruleset = RuleSet::build(&no_system_dirs_config(), tmp.path()).unwrap();
+    let input = make_bash_input("cat /var/log/system.log", tmp.path().to_path_buf());
+    match ruleset.evaluate(&input) {
+        Verdict::Deny(reason) => assert!(reason.contains("no_system_dirs"), "reason: {}", reason),
+        Verdict::Allow => panic!("expected deny for /var/log/system.log"),
+    }
+}
+
+#[test]
 fn test_bash_no_system_dirs_allows_usr_bin_log() {
     // /usr/bin/log is the macOS unified logging CLI and is an explicit
     // SYSTEM_DIRS exception.

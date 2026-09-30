@@ -636,6 +636,34 @@ fn test_edit_no_system_dirs_allows_private_tmp() {
 }
 
 #[test]
+fn test_write_no_system_dirs_allows_macos_tmpdir() {
+    // macOS `$TMPDIR` is /var/folders/.../T/, an explicit exception to
+    // the SYSTEM_DIRS `/var` and `/private` prefixes.
+    let tmp = TempDir::new().unwrap();
+    let config = Config {
+        block_access_to: vec![],
+        commands_forbidden: vec![],
+        log_dir: None,
+        internal_access_only: false,
+        no_root: false,
+        no_system_dirs: true,
+        no_unknown_tools: false,
+    };
+    let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
+    for path in &[
+        "/var/folders/66/bbm03j656rz04vx9k1r095400000gn/T/out.txt",
+        "/private/var/folders/66/bbm03j656rz04vx9k1r095400000gn/T/out.txt",
+        "/var/tmp/out.txt",
+    ] {
+        let input = make_file_tool_input("Write", path, tmp.path().to_path_buf());
+        match ruleset.evaluate(&input) {
+            Verdict::Allow => {}
+            Verdict::Deny(reason) => panic!("expected allow for '{}', got deny: {}", path, reason),
+        }
+    }
+}
+
+#[test]
 fn test_read_no_system_dirs_allows_usr_bin_log() {
     // /usr/bin/log (macOS unified logging CLI) is an explicit exception
     // to the SYSTEM_DIRS `/usr` prefix.

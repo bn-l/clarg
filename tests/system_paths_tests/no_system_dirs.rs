@@ -150,6 +150,67 @@ fn test_no_system_dirs_allows_private_tmp_exception() {
 }
 
 #[test]
+fn test_no_system_dirs_allows_var_temp_exceptions() {
+    // macOS `$TMPDIR` lives under /var/folders (canonically
+    // /private/var/folders), and /var/tmp is the persistent temp dir.
+    // Both spellings must work since targets are only lexically normalized.
+    let r = rule();
+    for path in &[
+        "/var/folders",
+        "/var/folders/66/bbm03j656rz04vx9k1r095400000gn/T/tmp.abc123",
+        "/private/var/folders",
+        "/private/var/folders/66/bbm03j656rz04vx9k1r095400000gn/T/foo.txt",
+        "/var/tmp",
+        "/var/tmp/scratch.txt",
+        "/private/var/tmp",
+        "/private/var/tmp/nested/dir/file",
+    ] {
+        assert!(
+            r.check(Path::new(path)).is_none(),
+            "expected temp exception '{}' to NOT be blocked",
+            path
+        );
+    }
+    // Siblings under /var and /private/var must still block, as must
+    // lookalikes that share a string prefix (component-wise starts_with).
+    for path in &[
+        "/var",
+        "/var/log/system.log",
+        "/var/db/x",
+        "/private/var",
+        "/private/var/log/x",
+        "/var/tmpfoo",
+        "/var/folders2/x",
+        "/private/var/tmp2",
+    ] {
+        assert!(
+            r.check(Path::new(path)).is_some(),
+            "expected non-temp /var path '{}' to still be blocked",
+            path
+        );
+    }
+}
+
+#[test]
+fn test_no_system_dirs_temp_exception_does_not_survive_dotdot_escape() {
+    // Paths are normalized before the check, so `..` climbing out of an
+    // exempt temp dir lands on the real (blocked) target.
+    let r = rule();
+    for path in &[
+        "/var/tmp/../log/system.log",
+        "/private/var/folders/../db/x",
+    ] {
+        let normalized = clarg::internalonly::normalize_path(Path::new(path));
+        assert!(
+            r.check(&normalized).is_some(),
+            "expected '{}' (normalized '{}') to be blocked",
+            path,
+            normalized.display()
+        );
+    }
+}
+
+#[test]
 fn test_no_system_dirs_allows_usr_bin_log_exception() {
     // /usr/bin/log (macOS unified logging CLI) is an explicit exception.
     let r = rule();

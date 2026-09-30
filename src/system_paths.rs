@@ -39,9 +39,23 @@ pub const SYSTEM_DIRS: &[&str] = &[
 ///   canonicalized or explicitly-written paths land here. `/tmp` itself
 ///   is intentionally excluded from `SYSTEM_DIRS`, so allowing
 ///   `/private/tmp` preserves that intent.
+/// * `/var/folders`, `/private/var/folders` — macOS per-user temp and
+///   cache dirs. `$TMPDIR` points here (not `/tmp`), so `mktemp`,
+///   Python `tempfile`, Node `os.tmpdir()` etc. all create files here.
+///   Both spellings are listed because targets are only lexically
+///   normalized, and `/var` is a symlink to `/private/var`.
+/// * `/var/tmp`, `/private/var/tmp` — persistent temp dir on macOS and
+///   Linux; same rationale as `/tmp`.
 /// * `/usr/bin/log` — macOS unified logging CLI; commonly invoked for
 ///   diagnostics and considered safe under `no_system_dirs`.
-pub const SYSTEM_DIRS_EXCEPTIONS: &[&str] = &["/private/tmp", "/usr/bin/log"];
+pub const SYSTEM_DIRS_EXCEPTIONS: &[&str] = &[
+    "/private/tmp",
+    "/var/folders",
+    "/private/var/folders",
+    "/var/tmp",
+    "/private/var/tmp",
+    "/usr/bin/log",
+];
 
 /// Rule for `no_root` and `no_system_dirs` special flags.
 ///
