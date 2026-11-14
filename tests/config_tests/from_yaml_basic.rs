@@ -226,3 +226,22 @@ special_flags:
 }
 
 // ============================================================================
+
+#[test]
+fn test_from_yaml_no_broad_search() {
+    let yaml = r#"
+special_flags:
+  no_broad_search: true
+"#;
+    let file = create_yaml_file(yaml);
+    let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
+    assert!(config.no_broad_search);
+    assert!(!config.no_root);
+}
+
+#[test]
+fn test_from_yaml_no_broad_search_defaults_off() {
+    let file = create_yaml_file("special_flags:\n  no_root: true\n");
+    let config = Config::from_yaml(&file.path().to_path_buf()).unwrap();
+    assert!(!config.no_broad_search);
+}

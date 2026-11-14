@@ -56,6 +56,7 @@ fn test_from_cli_only_block_access_to() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let config = Config::from_cli(cli).unwrap();
 
@@ -78,6 +79,7 @@ fn test_from_cli_only_commands_forbidden() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let config = Config::from_cli(cli).unwrap();
 
@@ -100,6 +102,7 @@ fn test_from_cli_only_log_dir() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let config = Config::from_cli(cli).unwrap();
 
@@ -120,6 +123,7 @@ fn test_from_cli_only_internal_access_only() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let config = Config::from_cli(cli).unwrap();
 
@@ -140,6 +144,7 @@ fn test_from_cli_only_no_root() {
         no_root: true,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let config = Config::from_cli(cli).unwrap();
     assert_eq!(config.no_root, true);
@@ -158,6 +163,7 @@ fn test_from_cli_only_no_system_dirs() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let config = Config::from_cli(cli).unwrap();
     assert_eq!(config.no_root, false);
@@ -176,6 +182,7 @@ fn test_from_cli_only_no_unknown_tools() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: true,
+        no_broad_search: false,
     };
     let config = Config::from_cli(cli).unwrap();
     assert_eq!(config.no_root, false);
@@ -200,6 +207,7 @@ special_flags:
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let config = Config::from_cli(cli).unwrap();
     assert_eq!(config.no_unknown_tools, true);
@@ -226,6 +234,7 @@ internal_access_only: true
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let config = Config::from_cli(cli).unwrap();
 

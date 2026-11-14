@@ -120,3 +120,19 @@ fn test_long_flag_internal_access_only_is_boolean() {
 
     assert_eq!(cli.internal_access_only, true);
 }
+
+// ============================================================================
+// LONG FLAG TESTS: --no-broad-search
+// ============================================================================
+
+#[test]
+fn test_long_flag_no_broad_search() {
+    let cli = Cli::try_parse_from(vec!["clarg", "--no-broad-search"]).unwrap();
+    assert!(cli.no_broad_search);
+}
+
+#[test]
+fn test_no_broad_search_defaults_off() {
+    let cli = Cli::try_parse_from(vec!["clarg", "-i"]).unwrap();
+    assert!(!cli.no_broad_search);
+}

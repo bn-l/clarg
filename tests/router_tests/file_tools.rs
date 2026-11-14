@@ -33,6 +33,7 @@ fn test_read_no_rules_allows_anything() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Read", "/etc/passwd", tmp.path().to_path_buf());
@@ -54,6 +55,7 @@ fn test_read_internal_only_blocks_external() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Read", "/etc/passwd", tmp.path().to_path_buf());
@@ -78,6 +80,7 @@ fn test_read_internal_only_allows_internal() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let file_path = project_root.join("src/main.rs").to_string_lossy().to_string();
@@ -101,6 +104,7 @@ fn test_read_blocked_files_denies_match() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     let file_path = project_root.join(".env").to_string_lossy().to_string();
@@ -126,6 +130,7 @@ fn test_read_blocked_files_allows_non_match() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     let file_path = project_root.join("config.json").to_string_lossy().to_string();
@@ -152,6 +157,7 @@ fn test_write_internal_only_blocks_external() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Write", "/tmp/malicious.sh", tmp.path().to_path_buf());
@@ -174,6 +180,7 @@ fn test_write_internal_only_allows_internal() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let file_path = project_root.join("output.txt").to_string_lossy().to_string();
@@ -197,6 +204,7 @@ fn test_write_blocked_files_denies_match() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     let file_path = project_root.join("api.secret").to_string_lossy().to_string();
@@ -225,6 +233,7 @@ fn test_edit_internal_only_blocks_external() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Edit", "/etc/hosts", tmp.path().to_path_buf());
@@ -247,6 +256,7 @@ fn test_edit_internal_only_allows_internal() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let file_path = project_root.join("src/lib.rs").to_string_lossy().to_string();
@@ -270,6 +280,7 @@ fn test_edit_blocked_files_denies_match() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     let file_path = project_root.join(".env.local").to_string_lossy().to_string();
@@ -296,6 +307,7 @@ fn test_file_tool_missing_file_path_allowed() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -329,6 +341,7 @@ fn test_file_tool_internal_only_checked_before_blocked_files() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // External path that also matches blocked_files pattern
@@ -359,6 +372,7 @@ fn test_read_parent_traversal_blocked() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let file_path = project_root.join("../../../etc/passwd").to_string_lossy().to_string();
@@ -381,6 +395,7 @@ fn test_write_tilde_expansion_blocked() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Write", "~/.bashrc", tmp.path().to_path_buf());
@@ -421,6 +436,7 @@ fn test_notebookedit_internal_only_blocks_external() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_notebook_edit_input("/etc/notebooks/evil.ipynb", tmp.path().to_path_buf());
@@ -445,6 +461,7 @@ fn test_notebookedit_internal_only_allows_internal() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let nb_path = project_root.join("notebook.ipynb").to_string_lossy().to_string();
@@ -468,6 +485,7 @@ fn test_notebookedit_blocked_files_denies_match() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     let nb_path = project_root.join("secret.ipynb").to_string_lossy().to_string();
@@ -492,6 +510,7 @@ fn test_notebookedit_no_rules_allows() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_notebook_edit_input("/anywhere/notebook.ipynb", tmp.path().to_path_buf());
@@ -513,6 +532,7 @@ fn test_notebookedit_case_insensitive_routing() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -550,6 +570,7 @@ fn test_read_no_root_blocks_root() {
         no_root: true,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Read", "/", tmp.path().to_path_buf());
@@ -573,6 +594,7 @@ fn test_write_no_system_dirs_blocks_etc() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Write", "/etc/passwd", tmp.path().to_path_buf());
@@ -598,6 +620,7 @@ fn test_edit_no_system_dirs_allows_tmp_when_only_system_flag_active() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Edit", "/tmp/scratch.txt", tmp.path().to_path_buf());
@@ -621,6 +644,7 @@ fn test_edit_no_system_dirs_allows_private_tmp() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input(
@@ -648,6 +672,7 @@ fn test_write_no_system_dirs_allows_macos_tmpdir() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     for path in &[
@@ -676,6 +701,7 @@ fn test_read_no_system_dirs_allows_usr_bin_log() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Read", "/usr/bin/log", tmp.path().to_path_buf());
@@ -699,6 +725,7 @@ fn test_read_no_system_dirs_blocks_usr_bin_login_lookalike() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Read", "/usr/bin/login", tmp.path().to_path_buf());
@@ -724,6 +751,7 @@ fn test_read_no_system_dirs_blocks_private_etc() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Read", "/private/etc/hosts", tmp.path().to_path_buf());
@@ -751,6 +779,7 @@ fn test_path_tool_with_only_system_paths_rule_does_not_short_circuit_allow() {
         no_root: true,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Read", "/", tmp.path().to_path_buf());
@@ -776,6 +805,7 @@ fn test_read_no_system_dirs_inside_project_allowed() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, &canonical).unwrap();
     let input = make_file_tool_input("Read", &file_path, canonical.clone());
@@ -803,6 +833,7 @@ fn test_read_tilde_root_blocked_by_no_system_dirs() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Read", "~root/.bashrc", tmp.path().to_path_buf());
@@ -825,6 +856,7 @@ fn test_write_tilde_user_blocked_by_internal_access_only() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Write", "~alice/secret.txt", tmp.path().to_path_buf());
@@ -856,6 +888,7 @@ fn test_read_tilde_plus_allowed_under_internal_only() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Read", "~+/Cargo.toml", tmp.path().to_path_buf());
@@ -879,6 +912,7 @@ fn test_write_tilde_minus_allowed_under_internal_only() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_file_tool_input("Write", "~-/out.txt", tmp.path().to_path_buf());

@@ -14,6 +14,7 @@ pub struct Config {
     pub no_root: bool,
     pub no_system_dirs: bool,
     pub no_unknown_tools: bool,
+    pub no_broad_search: bool,
 }
 
 /// Nested `special_flags` section of the YAML config. `deny_unknown_fields`
@@ -28,6 +29,8 @@ struct SpecialFlagsYaml {
     no_system_dirs: bool,
     #[serde(default)]
     no_unknown_tools: bool,
+    #[serde(default)]
+    no_broad_search: bool,
 }
 
 /// Intermediate struct for YAML deserialization.
@@ -77,6 +80,7 @@ impl Config {
                 no_root: cli.no_root,
                 no_system_dirs: cli.no_system_dirs,
                 no_unknown_tools: cli.no_unknown_tools,
+                no_broad_search: cli.no_broad_search,
             })
         }
     }
@@ -94,6 +98,7 @@ impl Config {
             no_root: yaml.special_flags.no_root,
             no_system_dirs: yaml.special_flags.no_system_dirs,
             no_unknown_tools: yaml.special_flags.no_unknown_tools,
+            no_broad_search: yaml.special_flags.no_broad_search,
         })
     }
 }

@@ -19,6 +19,7 @@ fn test_webfetch_always_allowed_no_rules() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -50,6 +51,7 @@ fn test_webfetch_allowed_with_internal_only() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -81,6 +83,7 @@ fn test_webfetch_allowed_with_all_rules() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -116,6 +119,7 @@ fn test_websearch_always_allowed_no_rules() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -147,6 +151,7 @@ fn test_websearch_allowed_with_internal_only() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -182,6 +187,7 @@ fn test_task_always_allowed_no_rules() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -215,6 +221,7 @@ fn test_task_allowed_with_internal_only() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -252,6 +259,7 @@ fn test_unknown_tool_allowed_no_rules() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -283,6 +291,7 @@ fn test_unknown_tool_allowed_with_all_rules() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -315,6 +324,7 @@ fn test_mcp_tool_allowed() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -350,6 +360,7 @@ fn test_webfetch_empty_input_allowed() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -379,6 +390,7 @@ fn test_task_empty_input_allowed() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -412,6 +424,7 @@ fn test_bash_lowercase_routed_correctly() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -443,6 +456,7 @@ fn test_bash_uppercase_routed_correctly() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -474,6 +488,7 @@ fn test_read_mixed_case_routed_correctly() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -503,6 +518,7 @@ fn test_glob_case_insensitive_routing() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -535,6 +551,7 @@ fn no_unknown_tools_config() -> Config {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: true,
+        no_broad_search: false,
     }
 }
 
@@ -569,6 +586,7 @@ fn test_unknown_tool_denied_with_all_other_rules_when_no_unknown_tools() {
         no_root: true,
         no_system_dirs: true,
         no_unknown_tools: true,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let json = json!({
@@ -740,6 +758,7 @@ fn test_grep_lowercase_routed_correctly() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 

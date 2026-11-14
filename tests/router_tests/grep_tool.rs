@@ -47,6 +47,7 @@ fn test_grep_no_rules_allows_anything() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_grep_input("/etc", "password", tmp.path().to_path_buf());
@@ -72,6 +73,7 @@ fn test_grep_internal_only_blocks_external_path() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_grep_input("/etc", "root", tmp.path().to_path_buf());
@@ -96,6 +98,7 @@ fn test_grep_internal_only_allows_internal_path() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let path = project_root.join("src").to_string_lossy().to_string();
@@ -118,6 +121,7 @@ fn test_grep_internal_only_blocks_home_var() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_grep_input("$HOME/.ssh", "key", tmp.path().to_path_buf());
@@ -140,6 +144,7 @@ fn test_grep_internal_only_blocks_parent_traversal() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let path = project_root.join("../../other").to_string_lossy().to_string();
@@ -167,6 +172,7 @@ fn test_grep_blocked_files_denies_blocked_path() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     let path = project_root.join(".secret").to_string_lossy().to_string();
@@ -192,6 +198,7 @@ fn test_grep_blocked_files_allows_non_blocked_path() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     let path = project_root.join("src").to_string_lossy().to_string();
@@ -218,6 +225,7 @@ fn test_grep_internal_checked_before_blocked_files() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // External path that also matches blocked_files
@@ -247,6 +255,7 @@ fn test_grep_missing_path_allowed() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
 
@@ -282,6 +291,7 @@ fn test_grep_relative_path_inside_allowed() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_grep_input_path_only("./tests", tmp.path().to_path_buf());
@@ -303,6 +313,7 @@ fn test_grep_relative_parent_traversal_blocked() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_grep_input_path_only("../../secrets", tmp.path().to_path_buf());
@@ -329,6 +340,7 @@ fn test_grep_absolute_internal_path_allowed() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let path = project_root.to_string_lossy().to_string();
@@ -355,6 +367,7 @@ fn test_grep_no_system_dirs_blocks_usr() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_grep_input_path_only("/usr/share", tmp.path().to_path_buf());
@@ -378,6 +391,7 @@ fn test_grep_no_root_blocks_root() {
         no_root: true,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_grep_input_path_only("/", tmp.path().to_path_buf());
@@ -405,6 +419,7 @@ fn test_grep_tilde_root_blocked_by_no_system_dirs() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_grep_input_path_only("~root", tmp.path().to_path_buf());

@@ -46,6 +46,7 @@ fn test_bash_internalonly_before_blocked_commands_external() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // This command triggers BOTH rules
@@ -77,6 +78,7 @@ fn test_bash_blocked_commands_triggers_when_internal() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // This command is internal but matches blocked pattern
@@ -106,6 +108,7 @@ fn test_bash_both_rules_pass_allows() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // Internal path, non-matching command
@@ -132,6 +135,7 @@ fn test_file_internalonly_before_blocked_files() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // External path that also matches blocked_files pattern
@@ -162,6 +166,7 @@ fn test_file_blocked_files_triggers_when_internal() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     // Internal path that matches blocked_files
@@ -193,6 +198,7 @@ fn test_file_both_rules_pass_allows() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     // Internal path, non-matching pattern
@@ -220,6 +226,7 @@ fn test_only_internalonly_blocks_external() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_read_input("/etc/passwd", tmp.path().to_path_buf());
@@ -242,6 +249,7 @@ fn test_only_internalonly_allows_internal() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let file_path = project_root.join("file.txt").to_string_lossy().to_string();
@@ -269,6 +277,7 @@ fn test_only_blocked_files_allows_non_matching_internal() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     // Internal path that doesn't match pattern - should be allowed
@@ -293,6 +302,7 @@ fn test_only_blocked_files_blocks_matching_pattern() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, &project_root).unwrap();
     let file_path = project_root.join(".env").to_string_lossy().to_string();
@@ -321,6 +331,7 @@ fn test_only_blocked_commands_allows_external_paths_in_bash() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // External path but no internal_only check
@@ -343,6 +354,7 @@ fn test_only_blocked_commands_blocks_matching_pattern() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_bash_input("rm -rf /important", tmp.path().to_path_buf());
@@ -370,6 +382,7 @@ fn test_no_rules_allows_everything_bash() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_bash_input("rm -rf / && cat /etc/passwd", tmp.path().to_path_buf());
@@ -397,6 +410,7 @@ fn test_bash_system_paths_before_internal_access_only() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // /etc/passwd triggers both internal_access_only and no_system_dirs.
@@ -425,6 +439,7 @@ fn test_bash_system_paths_before_blocked_files() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     // Both rules match /etc/passwd.
@@ -453,6 +468,7 @@ fn test_path_tool_system_paths_before_internal_access_only() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_read_input("/etc/passwd", tmp.path().to_path_buf());
@@ -480,6 +496,7 @@ fn test_path_tool_system_paths_before_blocked_files() {
         no_root: false,
         no_system_dirs: true,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_read_input("/etc/passwd", tmp.path().to_path_buf());
@@ -507,6 +524,7 @@ fn test_no_rules_allows_everything_read() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let ruleset = RuleSet::build(&config, tmp.path()).unwrap();
     let input = make_read_input("/etc/shadow", tmp.path().to_path_buf());

@@ -17,6 +17,7 @@ fn test_build_with_empty_config() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());
@@ -33,6 +34,7 @@ fn test_build_with_internal_only() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());
@@ -49,6 +51,7 @@ fn test_build_with_blocked_files() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());
@@ -65,6 +68,7 @@ fn test_build_with_blocked_commands() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());
@@ -81,6 +85,7 @@ fn test_build_with_all_rules() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());
@@ -97,6 +102,7 @@ fn test_build_with_invalid_regex_fails() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_err());
@@ -112,6 +118,7 @@ fn test_build_with_nonexistent_project_root_for_internal_only_fails() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let result = RuleSet::build(&config, std::path::Path::new("/nonexistent/path/xyz123"));
     assert!(result.is_err());
@@ -128,6 +135,7 @@ fn test_build_blocked_files_without_internal_only() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());
@@ -149,6 +157,7 @@ fn test_build_with_multiple_file_patterns() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());
@@ -170,6 +179,7 @@ fn test_build_with_multiple_command_patterns() {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     };
     let result = RuleSet::build(&config, tmp.path());
     assert!(result.is_ok());

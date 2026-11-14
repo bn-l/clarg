@@ -19,6 +19,7 @@ fn config(internal_only: bool, blocked: &[&str]) -> Config {
         no_root: !internal_only,
         no_system_dirs: !internal_only,
         no_unknown_tools: false,
+        no_broad_search: false,
     }
 }
 

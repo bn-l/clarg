@@ -379,3 +379,30 @@ fn test_relative_config_without_project_dir_uses_cwd() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[test]
+fn test_yaml_special_flags_no_broad_search_denies_home_search() {
+    let tmp = tempfile::tempdir().unwrap();
+    let canonical = tmp.path().canonicalize().unwrap();
+    let cwd = canonical.to_str().unwrap();
+    let config_path = tmp.path().join("config.yaml");
+    std::fs::write(&config_path, "special_flags:\n  no_broad_search: true\n").unwrap();
+
+    let deny = hook_json_with_cwd("Bash", serde_json::json!({"command": "fd -t f 'mako.rb' ~"}), cwd);
+    let (code, stdout, _) = run_clarg(&[config_path.to_str().unwrap()], &deny);
+    assert_eq!(code, 2, "stdout: {stdout}");
+    assert!(stdout.contains("no_broad_search"), "got: {stdout}");
+
+    let allow = hook_json_with_cwd("Bash", serde_json::json!({"command": "fd -t f 'mako.rb' src"}), cwd);
+    let (code, _, stderr) = run_clarg(&[config_path.to_str().unwrap()], &allow);
+    assert_eq!(code, 0, "stderr: {stderr}");
+}
+
+#[test]
+fn test_cli_no_broad_search_denies_listing_home() {
+    let tmp = tempfile::tempdir().unwrap();
+    let canonical = tmp.path().canonicalize().unwrap();
+    let input = hook_json_with_cwd("Bash", serde_json::json!({"command": "ls ~"}), canonical.to_str().unwrap());
+    let (code, stdout, _) = run_clarg(&["--no-broad-search"], &input);
+    assert_eq!(code, 2, "stdout: {stdout}");
+}

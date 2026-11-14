@@ -141,3 +141,12 @@ fn test_config_path_conflicts_with_multiple_flags_long_form() {
     let err = result.unwrap_err();
     assert!(err.to_string().contains("conflict") || err.to_string().contains("cannot be used"));
 }
+
+#[test]
+fn test_config_path_conflicts_with_no_broad_search() {
+    let args = vec!["clarg", "config.yaml", "--no-broad-search"];
+    let result = Cli::try_parse_from(args);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    assert!(err.to_string().contains("conflict") || err.to_string().contains("cannot be used"));
+}

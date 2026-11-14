@@ -26,10 +26,6 @@ const FILE_COMMANDS: &[&str] = &[
 /// `pushd` navigates the dir stack.
 const DIR_TARGET_COMMANDS: &[&str] = &["mkdir", "rmdir", "pushd"];
 
-/// Search commands that take paths as non-flag arguments, but have some flags
-/// that consume an argument.
-const SEARCH_COMMANDS: &[&str] = &["rg", "grep", "find", "fd", "ag", "ack"];
-
 /// Flags for search commands that consume the next argument (so we skip it).
 const SEARCH_ARG_FLAGS: &[&str] = &[
     "-e", "-f", "-g", "--glob", "-t", "--type", "-T", "--type-not",
@@ -139,6 +135,10 @@ pub enum PathContext {
     DdPath,
     /// Path-like argument to an unrecognized command
     UnknownCommandArg,
+    /// A directory a search or listing walks (`rg foo DIR`, `fd x DIR`,
+    /// `find DIR`, `ls DIR`, `du DIR`, `tree DIR`), including the current
+    /// directory (raw `.`) when none is given.
+    SearchRoot { command: String },
 }
 
 impl PathContext {
@@ -149,6 +149,7 @@ impl PathContext {
             PathContext::DownloadOutput => "download output path",
             PathContext::UploadData => "upload/data file path",
             PathContext::HelperFile => "helper file path",
+            PathContext::SearchRoot { .. } => "search path",
             // InlineCodeRef / InlineCodeExecution have custom messaging
             _ => "path",
         }
@@ -1764,26 +1765,41 @@ fn extract_paths_from_sub_command(
                 }
             }
         }
-        "rg" | "grep" => {
-            for p in pattern_search_paths(cmd_name, args) {
-                found.push((p, PathContext::SearchCommandArg));
+        "rg" | "grep" | "egrep" | "fgrep" | "ag" | "ack" => {
+            let mut roots = pattern_search_paths(search_syntax(cmd_name), args);
+            if roots.is_empty() && searches_recursively(cmd_name, args) {
+                roots.push(".".to_string()); // searches the current directory
             }
+            let ctx = PathContext::SearchRoot { command: cmd_name.to_string() };
+            found.extend(roots.into_iter().map(|r| (r, ctx.clone())));
         }
-        cmd if SEARCH_COMMANDS.contains(&cmd) => {
-            let mut i = 0;
+        "fd" | "fdfind" => {
+            let ctx = PathContext::SearchRoot { command: cmd_name.to_string() };
+            found.extend(fd_roots(args).into_iter().map(|r| (r, ctx.clone())));
+        }
+        "find" => {
+            let (roots, expr_start) = find_roots(args);
+            let ctx = PathContext::SearchRoot { command: cmd_name.to_string() };
+            found.extend(roots.into_iter().map(|r| (r, ctx.clone())));
+            // The expression: `-exec rm -rf / ;`, `-newer FILE`, …
+            let mut i = expr_start;
             while i < args.len() {
                 let arg = &args[i];
                 if SEARCH_ARG_FLAGS.contains(&arg.as_str()) {
                     i += 2;
                     continue;
                 }
-                if arg.starts_with('-') {
-                    i += 1;
-                    continue;
+                if !arg.starts_with('-') && !matches!(arg.as_str(), "(" | "!" | ")") {
+                    found.push((arg.clone(), PathContext::SearchCommandArg));
                 }
-                found.push((arg.clone(), PathContext::SearchCommandArg));
                 i += 1;
             }
+        }
+        "ls" | "dir" | "vdir" | "eza" | "exa" | "lsd" | "tree" | "du" => {
+            let (roots, plain) = listing_roots(cmd_name, args);
+            let ctx = PathContext::SearchRoot { command: cmd_name.to_string() };
+            found.extend(roots.into_iter().map(|r| (r, ctx.clone())));
+            found.extend(plain.into_iter().map(|p| (p, PathContext::UnknownCommandArg)));
         }
         cmd if EXEC_COMMANDS.contains(&cmd) => {
             // Check for inline code interpreters first
@@ -2029,36 +2045,77 @@ fn shell_invocation(args: &[String]) -> ShellInvocation<'_> {
     }
 }
 
-/// Short flags of `rg` / `grep` that take a value (next argument, or the
-/// rest of the cluster). Only flags known to take a value are listed: a
-/// missing one makes its value look like the pattern, which is the safe
-/// direction (the real pattern is then checked as a path), whereas a
-/// wrongly listed one would swallow the pattern and hide a path.
-const RG_VALUE_SHORT: &str = "efgtTmABCdjEMr";
-const GREP_VALUE_SHORT: &str = "efmABCdD";
-const RG_VALUE_LONG: &[&str] = &[
-    "regexp", "file", "glob", "iglob", "type", "type-not", "type-add", "type-clear",
-    "max-count", "after-context", "before-context", "context", "max-depth", "threads",
-    "encoding", "max-columns", "replace", "color", "colors", "sort", "sortr",
-    "ignore-file", "path-separator", "pre", "pre-glob", "regex-size-limit",
-    "dfa-size-limit", "max-filesize", "context-separator", "field-context-separator",
-    "field-match-separator", "engine", "hostname-bin", "hyperlink-format", "generate",
-];
-const GREP_VALUE_LONG: &[&str] = &[
-    "regexp", "file", "max-count", "after-context", "before-context", "label",
-    "binary-files", "devices", "directories", "include", "exclude", "exclude-dir",
-    "exclude-from",
-];
+/// Option syntax of a pattern-first search tool (`rg PATTERN [PATH…]`).
+///
+/// Value-taking flags list only flags known to take a value: a missing one
+/// makes its value look like the pattern, which is the safe direction
+/// (the real pattern is then checked as a path), whereas a wrongly listed
+/// one would swallow the pattern and hide a path. Flags with an optional
+/// value (`ag -A [N]`, GNU `grep --color[=WHEN]`) are deliberately absent.
+struct SearchSyntax {
+    value_short: &'static str,
+    value_long: &'static [&'static str],
+    /// Flags meaning "no positional pattern" (the pattern comes from the
+    /// flag, or there is none: `rg --files`, `ack -f`).
+    pattern_short: &'static str,
+    pattern_long: &'static [&'static str],
+}
 
-/// Path operands of `rg` / `grep`. The first positional argument is the
-/// pattern unless one was given with `-e` / `-f` / `--regexp` / `--file`
-/// (or rg is listing files with `--files` / `--type-list`).
-fn pattern_search_paths(cmd: &str, args: &[String]) -> Vec<String> {
-    let (short_vals, long_vals) = if cmd == "rg" {
-        (RG_VALUE_SHORT, RG_VALUE_LONG)
-    } else {
-        (GREP_VALUE_SHORT, GREP_VALUE_LONG)
-    };
+const RG_SYNTAX: SearchSyntax = SearchSyntax {
+    value_short: "efgtTmABCdjEMr",
+    value_long: &[
+        "regexp", "file", "glob", "iglob", "type", "type-not", "type-add", "type-clear",
+        "max-count", "after-context", "before-context", "context", "max-depth", "threads",
+        "encoding", "max-columns", "replace", "color", "colors", "sort", "sortr",
+        "ignore-file", "path-separator", "pre", "pre-glob", "regex-size-limit",
+        "dfa-size-limit", "max-filesize", "context-separator", "field-context-separator",
+        "field-match-separator", "engine", "hostname-bin", "hyperlink-format", "generate",
+    ],
+    pattern_short: "ef",
+    pattern_long: &["regexp", "file", "files", "type-list"],
+};
+
+const GREP_SYNTAX: SearchSyntax = SearchSyntax {
+    value_short: "efmABCdD",
+    value_long: &[
+        "regexp", "file", "max-count", "after-context", "before-context", "label",
+        "binary-files", "devices", "directories", "include", "exclude", "exclude-dir",
+        "exclude-from",
+    ],
+    pattern_short: "ef",
+    pattern_long: &["regexp", "file"],
+};
+
+const AG_SYNTAX: SearchSyntax = SearchSyntax {
+    value_short: "Ggmp",
+    value_long: &[
+        "depth", "ignore", "ignore-dir", "path-to-ignore", "file-search-regex",
+        "max-count", "workers", "pager",
+    ],
+    pattern_short: "g",
+    pattern_long: &[],
+};
+
+const ACK_SYNTAX: SearchSyntax = SearchSyntax {
+    value_short: "gmAB",
+    value_long: &["ignore-dir", "noignore-dir", "ignore-file", "type", "output", "match"],
+    pattern_short: "gf",
+    pattern_long: &["match"],
+};
+
+fn search_syntax(cmd: &str) -> &'static SearchSyntax {
+    match cmd {
+        "rg" => &RG_SYNTAX,
+        "ag" => &AG_SYNTAX,
+        "ack" => &ACK_SYNTAX,
+        _ => &GREP_SYNTAX,
+    }
+}
+
+/// Path operands of a pattern-first search tool. The first positional
+/// argument is the pattern unless a flag supplied it (or made it
+/// unnecessary).
+fn pattern_search_paths(syntax: &SearchSyntax, args: &[String]) -> Vec<String> {
     let mut positional = Vec::new();
     let mut pattern_given = false;
     let mut options_done = false;
@@ -2079,20 +2136,16 @@ fn pattern_search_paths(cmd: &str, args: &[String]) -> Vec<String> {
                 Some((n, _)) => (n, true),
                 None => (long, false),
             };
-            if matches!(name, "regexp" | "file")
-                || (cmd == "rg" && matches!(name, "files" | "type-list"))
-            {
-                pattern_given = true;
-            }
-            if !inline_value && long_vals.contains(&name) {
+            pattern_given |= syntax.pattern_long.contains(&name);
+            if !inline_value && syntax.value_long.contains(&name) {
                 i += 1;
             }
             continue;
         }
         let flags: Vec<char> = a[1..].chars().collect();
         for (k, c) in flags.iter().enumerate() {
-            if short_vals.contains(*c) {
-                pattern_given |= matches!(c, 'e' | 'f');
+            pattern_given |= syntax.pattern_short.contains(*c);
+            if syntax.value_short.contains(*c) {
                 if k + 1 == flags.len() {
                     i += 1; // value is the next argument
                 }
@@ -2105,6 +2158,203 @@ fn pattern_search_paths(cmd: &str, args: &[String]) -> Vec<String> {
     } else {
         positional.into_iter().skip(1).collect()
     }
+}
+
+/// Does this search walk directories? `rg` / `ag` / `ack` always do;
+/// `grep` only with `-r` / `-R` / `--recursive` / `-d recurse`.
+fn searches_recursively(cmd: &str, args: &[String]) -> bool {
+    if !matches!(cmd, "grep" | "egrep" | "fgrep") {
+        return true;
+    }
+    args.iter().enumerate().any(|(i, a)| {
+        matches!(a.as_str(), "--recursive" | "--dereference-recursive" | "--directories=recurse")
+            || (a == "-d" && args.get(i + 1).is_some_and(|v| v == "recurse"))
+            || (a.starts_with('-') && !a.starts_with("--") && a[1..].contains(['r', 'R']))
+    })
+}
+
+const FD_VALUE_SHORT: &str = "etEdSojc";
+const FD_VALUE_LONG: &[&str] = &[
+    "extension", "type", "exclude", "max-depth", "min-depth", "exact-depth", "size",
+    "changed-within", "changed-before", "change-newer-than", "change-older-than", "newer",
+    "older", "owner", "threads", "max-results", "color", "format", "ignore-file",
+    "path-separator", "batch-size", "and", "max-buffer-time", "search-path", "base-directory",
+];
+
+/// Search roots of `fd [PATTERN] [PATH…]`, including `--search-path` and
+/// `--base-directory` (which relative roots are resolved against). The
+/// pattern itself is not a path. `-x` / `--exec` take the rest of the
+/// arguments as a command.
+fn fd_roots(args: &[String]) -> Vec<String> {
+    let mut positional = Vec::new();
+    let mut search_paths = Vec::new();
+    let mut base: Option<String> = None;
+    let mut options_done = false;
+    let mut i = 0;
+    'args: while i < args.len() {
+        let a = &args[i];
+        i += 1;
+        if options_done || !a.starts_with('-') || a == "-" {
+            positional.push(a.clone());
+            continue;
+        }
+        if a == "--" {
+            options_done = true;
+            continue;
+        }
+        if let Some(long) = a.strip_prefix("--") {
+            let (name, mut value) = match long.split_once('=') {
+                Some((n, v)) => (n, Some(v.to_string())),
+                None => (long, None),
+            };
+            if matches!(name, "exec" | "exec-batch") {
+                break;
+            }
+            if value.is_none() && FD_VALUE_LONG.contains(&name) {
+                value = args.get(i).cloned();
+                i += 1;
+            }
+            match name {
+                "search-path" => search_paths.extend(value),
+                "base-directory" => base = value,
+                _ => {}
+            }
+            continue;
+        }
+        let flags: Vec<char> = a[1..].chars().collect();
+        for (k, c) in flags.iter().enumerate() {
+            if matches!(c, 'x' | 'X') {
+                break 'args;
+            }
+            if FD_VALUE_SHORT.contains(*c) {
+                if k + 1 == flags.len() {
+                    i += 1;
+                }
+                break;
+            }
+        }
+    }
+    let mut roots: Vec<String> = positional.into_iter().skip(1).chain(search_paths).collect();
+    match base {
+        Some(base) if roots.is_empty() => roots.push(base),
+        Some(base) => {
+            for r in &mut roots {
+                if !(r.starts_with('/') || r.starts_with('~') || r.starts_with('$')) {
+                    *r = format!("{}/{}", base.trim_end_matches('/'), r);
+                }
+            }
+        }
+        None if roots.is_empty() => roots.push(".".to_string()),
+        None => {}
+    }
+    roots
+}
+
+/// Search roots of `find`: the operands before the expression, after any
+/// leading options (`-H`, `-L`, `-P`, BSD `-E` / `-X` / `-d` / `-s` / `-x`,
+/// GNU `-D opts` / `-O3`); BSD `-f PATH` names a root too. Returns the
+/// roots and the index where the expression starts.
+fn find_roots(args: &[String]) -> (Vec<String>, usize) {
+    let mut roots = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "-H" | "-L" | "-P" | "-E" | "-X" | "-d" | "-s" | "-x" => i += 1,
+            "-D" => i += 2,
+            "-f" => {
+                roots.extend(args.get(i + 1).cloned());
+                i += 2;
+            }
+            a if a.starts_with("-O") && a.len() > 2 => i += 1,
+            _ => break,
+        }
+    }
+    while i < args.len() {
+        let a = args[i].as_str();
+        if a.starts_with('-') || matches!(a, "(" | "!" | ")") {
+            break;
+        }
+        roots.push(args[i].clone());
+        i += 1;
+    }
+    if roots.is_empty() {
+        roots.push(".".to_string());
+    }
+    (roots, i)
+}
+
+/// Value-taking flags of the directory listers / walkers (`ls`, `eza`,
+/// `lsd`, `tree`, `du`). Only flags known to take a value are listed; a
+/// missing one just turns its value into an extra root (safe direction).
+fn listing_value_flags(cmd: &str) -> (&'static str, &'static [&'static str]) {
+    match cmd {
+        "tree" => ("LPIoHT", &["filelimit", "charset", "timefmt", "sort", "hintro", "houtro"]),
+        "du" => (
+            "dBtIX",
+            &["max-depth", "block-size", "threshold", "exclude-from", "files0-from", "time-style"],
+        ),
+        "eza" | "exa" => ("LsIt", &["level", "sort", "ignore-glob", "time", "color", "colour"]),
+        "lsd" => ("I", &["depth", "ignore-glob", "color", "icon", "sort", "date", "size", "blocks"]),
+        // BSD `ls` (macOS) has no value-taking short flags.
+        _ => (
+            "",
+            &[
+                "color", "colour", "format", "sort", "time", "time-style", "width", "ignore",
+                "hide", "indicator-style", "quoting-style", "tabsize", "block-size",
+            ],
+        ),
+    }
+}
+
+/// Operands of a lister / walker. Returns `(roots, plain)`: `roots` have
+/// their contents listed (the current directory when none is given);
+/// `plain` operands are only named, as with `ls -d DIR`.
+fn listing_roots(cmd: &str, args: &[String]) -> (Vec<String>, Vec<String>) {
+    let (value_short, value_long) = listing_value_flags(cmd);
+    let mut operands = Vec::new();
+    let mut directory_only = false;
+    let mut options_done = false;
+    let mut i = 0;
+    while i < args.len() {
+        let a = &args[i];
+        i += 1;
+        if options_done || !a.starts_with('-') || a == "-" {
+            operands.push(a.clone());
+            continue;
+        }
+        if a == "--" {
+            options_done = true;
+            continue;
+        }
+        if let Some(long) = a.strip_prefix("--") {
+            let (name, inline_value) = match long.split_once('=') {
+                Some((n, _)) => (n, true),
+                None => (long, false),
+            };
+            directory_only |= matches!(name, "directory" | "list-dirs" | "directory-only");
+            if !inline_value && value_long.contains(&name) {
+                i += 1;
+            }
+            continue;
+        }
+        let flags: Vec<char> = a[1..].chars().collect();
+        for (k, c) in flags.iter().enumerate() {
+            if value_short.contains(*c) {
+                if k + 1 == flags.len() {
+                    i += 1;
+                }
+                break;
+            }
+            directory_only |= *c == 'd' && matches!(cmd, "ls" | "dir" | "vdir" | "eza" | "exa" | "lsd");
+        }
+    }
+    if directory_only {
+        return (Vec::new(), operands);
+    }
+    if operands.is_empty() {
+        operands.push(".".to_string());
+    }
+    (operands, Vec::new())
 }
 
 

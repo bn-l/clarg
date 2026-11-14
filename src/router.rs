@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use crate::bash_analyzer::{self, ExtractedPath, PathContext};
 use crate::blocked_commands::BlockedCommandsRule;
+use crate::broad_search::{BroadSearchRule, glob_tool_root};
 use crate::blocked_files::BlockedFilesRule;
 use crate::config::Config;
 use crate::hook_input::HookInput;
@@ -39,6 +40,7 @@ pub struct RuleSet {
     system_paths: Option<SystemPathsRule>,
     blocked_files: Option<BlockedFilesRule>,
     blocked_commands: Option<BlockedCommandsRule>,
+    broad_search: Option<BroadSearchRule>,
     no_unknown_tools: bool,
 }
 
@@ -48,7 +50,8 @@ impl RuleSet {
         let system_paths_active = config.no_root || config.no_system_dirs;
         let needs_canonical = config.internal_access_only
             || !config.block_access_to.is_empty()
-            || system_paths_active;
+            || system_paths_active
+            || config.no_broad_search;
         let project_root = if needs_canonical {
             let canonical = resolve_project_root(raw_project_root)?;
             log::debug!(
@@ -106,6 +109,12 @@ impl RuleSet {
             system_paths,
             blocked_files,
             blocked_commands,
+            broad_search: if config.no_broad_search {
+                log::debug!("building broad_search rule");
+                BroadSearchRule::new()
+            } else {
+                None
+            },
             no_unknown_tools: config.no_unknown_tools,
         })
     }
@@ -155,16 +164,14 @@ impl RuleSet {
                     }
                 }
             }
-            "glob" | "grep" => match input.search_path() {
-                Some(p) => {
-                    log::debug!("search tool '{}': path='{}'", input.tool_name, p);
-                    self.evaluate_path_tool(p, &self.start_dir(input))
-                }
-                None => {
-                    log::debug!("search tool '{}': no path in input, allowing", input.tool_name);
-                    Verdict::Allow
-                }
-            },
+            // The root a search walks: Grep's `path` (default: the current
+            // directory); for Glob, `path` joined with the literal start of
+            // the pattern, so an absolute pattern like `~/**/x` is checked.
+            "grep" => self.evaluate_search_tool(input, input.search_path().unwrap_or(".")),
+            "glob" => self.evaluate_search_tool(
+                input,
+                &glob_tool_root(input.search_path(), input.pattern()),
+            ),
             // Known non-filesystem tools — always allow
             "webfetch" | "websearch" | "task" | "agent" | "askuserquestion"
             | "todowrite" | "skill" | "sendmessage" | "teamcreate"
@@ -238,6 +245,25 @@ impl RuleSet {
                 }
                 let resolved = resolve_ep(ep, &base);
                 if let Some(reason) = rule.check_with_glob(&resolved, ep.unquoted_glob) {
+                    return Verdict::Deny(reason);
+                }
+            }
+        }
+
+        // 1b. no_broad_search: never search, list or glob-enumerate $HOME
+        // or anything above it.
+        if let Some(rule) = &self.broad_search {
+            for ep in &paths {
+                if matches!(
+                    ep.context,
+                    PathContext::CdImplicitHome
+                        | PathContext::CdDash
+                        | PathContext::InlineCodeExecution { .. }
+                ) {
+                    continue;
+                }
+                let resolved = resolve_ep(ep, &base);
+                if let Some(reason) = rule.check(ep, &resolved) {
                     return Verdict::Deny(reason);
                 }
             }
@@ -333,6 +359,22 @@ impl RuleSet {
             }
         }
 
+        Verdict::Allow
+    }
+
+    /// Evaluate Claude Code's Grep / Glob tool by the root it walks.
+    fn evaluate_search_tool(&self, input: &HookInput, root: &str) -> Verdict {
+        log::debug!("search tool '{}': root='{}'", input.tool_name, root);
+        let base = self.start_dir(input);
+        if let Verdict::Deny(reason) = self.evaluate_path_tool(root, &base) {
+            return Verdict::Deny(reason);
+        }
+        if let Some(rule) = &self.broad_search {
+            let resolved = resolve_target(root, &base);
+            if let Some(reason) = rule.check_root(&input.tool_name, &resolved) {
+                return Verdict::Deny(reason);
+            }
+        }
         Verdict::Allow
     }
 

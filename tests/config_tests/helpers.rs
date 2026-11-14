@@ -20,6 +20,7 @@ pub fn create_cli_no_flags() -> Cli {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     }
 }
 
@@ -33,6 +34,7 @@ pub fn create_cli_all_flags() -> Cli {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     }
 }
 
@@ -46,5 +48,6 @@ pub fn create_cli_partial_flags() -> Cli {
         no_root: false,
         no_system_dirs: false,
         no_unknown_tools: false,
+        no_broad_search: false,
     }
 }

@@ -1,6 +1,7 @@
 pub mod bash_analyzer;
 pub mod blocked_commands;
 pub mod blocked_files;
+pub mod broad_search;
 pub mod cli;
 pub mod config;
 pub mod hook_input;

@@ -24,6 +24,7 @@ pub struct Cli {
         "no_root",
         "no_system_dirs",
         "no_unknown_tools",
+        "no_broad_search",
     ])]
     pub config_path: Option<PathBuf>,
 
@@ -67,4 +68,10 @@ pub struct Cli {
     /// MCP tools like `mcp__filesystem__read_file`).
     #[arg(long = "no-unknown-tools")]
     pub no_unknown_tools: bool,
+
+    /// Block searching or listing your home folder or anything above it
+    /// (`rg foo ~`, `fd x /Users`, `ls ~`, `echo ~/*`, the Grep/Glob tools
+    /// on `~`). Subfolders such as `~/projects` stay allowed.
+    #[arg(long = "no-broad-search")]
+    pub no_broad_search: bool,
 }

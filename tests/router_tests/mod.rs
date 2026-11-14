@@ -6,3 +6,4 @@ mod grep_tool;
 mod passthrough_tools;
 mod rule_ordering;
 mod shell_semantics;
+mod broad_search;
