@@ -36,6 +36,11 @@ impl HookInput {
         self.tool_input.get("pattern").and_then(|v| v.as_str())
     }
 
+    /// Extract `tool_input.filePath` (used by LSP).
+    pub fn lsp_file_path(&self) -> Option<&str> {
+        self.tool_input.get("filePath").and_then(|v| v.as_str())
+    }
+
     /// Extract `tool_input.notebook_path` (used by NotebookEdit).
     pub fn notebook_path(&self) -> Option<&str> {
         self.tool_input

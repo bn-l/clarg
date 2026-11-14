@@ -541,3 +541,62 @@ fn test_here_string_command_sub_with_inner_quoted_paren() {
         result
     );
 }
+
+// ============================================================================
+// Comments (stripped by the same scanner)
+// ============================================================================
+
+#[test]
+fn test_find_heredoc_spans_reports_comment_span() {
+    use clarg::bash_analyzer::SpanKind;
+    let cmd = "ls # see /etc\ncat a";
+    let spans = find_heredoc_spans(cmd);
+    assert_eq!(spans.len(), 1, "{:?}", spans);
+    assert_eq!(spans[0].kind, SpanKind::Comment);
+    assert_eq!(&cmd[spans[0].start..spans[0].end], "# see /etc");
+}
+
+#[test]
+fn test_hash_inside_word_is_not_a_comment() {
+    for cmd in ["echo a#b", "echo ${#arr}", "echo $#", "curl http://x/#frag"] {
+        let spans = find_heredoc_spans(cmd);
+        assert!(spans.is_empty(), "{cmd:?} -> {:?}", spans);
+    }
+}
+
+#[test]
+fn test_quoted_hash_is_not_a_comment() {
+    assert!(find_heredoc_spans("echo '# not a comment'").is_empty());
+}
+
+#[test]
+fn test_heredoc_operator_inside_comment_is_ignored() {
+    // `# … <<EOF` must not queue a heredoc that swallows the rest.
+    let stripped = strip_heredocs("# usage: cat <<EOF\nrm -rf /");
+    assert!(stripped.contains("rm -rf /"), "got: {stripped:?}");
+}
+
+#[test]
+fn test_apostrophe_in_comment_does_not_open_quote() {
+    let paths = extract_paths("# don't\ncat /etc/passwd");
+    assert!(
+        paths.iter().any(|p| p.raw == "/etc/passwd"),
+        "got: {:?}",
+        paths
+    );
+}
+
+#[test]
+fn test_redirect_inside_comment_is_ignored() {
+    let paths = extract_paths("cat a # then > /etc/x");
+    assert!(!paths.iter().any(|p| p.raw.contains("/etc/x")), "got: {:?}", paths);
+}
+
+#[test]
+fn test_heredoc_body_expands_flag() {
+    use clarg::bash_analyzer::SpanKind;
+    let unquoted = find_heredoc_spans("cat <<EOF\nx\nEOF");
+    assert_eq!(unquoted[1].kind, SpanKind::HeredocBody { expands: true });
+    let quoted = find_heredoc_spans("cat <<'EOF'\nx\nEOF");
+    assert_eq!(quoted[1].kind, SpanKind::HeredocBody { expands: false });
+}

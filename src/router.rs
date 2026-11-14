@@ -23,11 +23,12 @@ pub enum Verdict {
 /// (tilde/`$HOME` resolved per source-level quote context), so we must
 /// NOT call `resolve_target` — that would double-expand quoted
 /// literals like `'~/foo'`. All other contexts go through the normal
-/// resolver.
-fn resolve_ep(ep: &ExtractedPath, project_root: &Path) -> PathBuf {
+/// resolver. Relative paths resolve against `base`, the shell's
+/// starting directory.
+fn resolve_ep(ep: &ExtractedPath, base: &Path) -> PathBuf {
     match ep.context {
-        PathContext::Redirection => resolve_literal_target(&ep.raw, project_root),
-        _ => resolve_target(&ep.raw, project_root),
+        PathContext::Redirection => resolve_literal_target(&ep.raw, base),
+        _ => resolve_target(&ep.raw, base),
     }
 }
 
@@ -109,17 +110,44 @@ impl RuleSet {
         })
     }
 
+    /// The shell's working directory when a command starts: the hook's
+    /// `cwd` when it is an existing absolute directory (canonicalized like
+    /// the project root), otherwise the project root. Relative paths are
+    /// resolved against it; the project root stays the containment
+    /// boundary for `internal_access_only`.
+    fn start_dir(&self, input: &HookInput) -> PathBuf {
+        if input.cwd.is_absolute()
+            && let Ok(canonical) = input.cwd.canonicalize()
+            && canonical.is_dir()
+        {
+            return canonical;
+        }
+        self.project_root.clone()
+    }
+
     pub fn evaluate(&self, input: &HookInput) -> Verdict {
         let tool_name_lower = input.tool_name.to_ascii_lowercase();
         log::debug!("routing tool '{}' (normalized: '{}')", input.tool_name, tool_name_lower);
         match tool_name_lower.as_str() {
             "bash" => self.evaluate_bash(input),
-            "read" | "write" | "edit" | "notebookedit" => {
-                let path = input.file_path().or_else(|| input.notebook_path());
+            // Monitor runs a shell command in the same environment as
+            // Bash. Its WebSocket form (`ws`, no `command`) runs nothing.
+            "monitor" => match input.command() {
+                Some(_) => self.evaluate_bash(input),
+                None => {
+                    log::debug!("monitor: no command (WebSocket source), allowing");
+                    Verdict::Allow
+                }
+            },
+            "read" | "write" | "edit" | "notebookedit" | "lsp" => {
+                let path = input
+                    .file_path()
+                    .or_else(|| input.notebook_path())
+                    .or_else(|| input.lsp_file_path());
                 match path {
                     Some(p) => {
                         log::debug!("path tool '{}': target='{}'", input.tool_name, p);
-                        self.evaluate_path_tool(p)
+                        self.evaluate_path_tool(p, &self.start_dir(input))
                     }
                     None => {
                         log::debug!("path tool '{}': no path in input, allowing", input.tool_name);
@@ -130,7 +158,7 @@ impl RuleSet {
             "glob" | "grep" => match input.search_path() {
                 Some(p) => {
                     log::debug!("search tool '{}': path='{}'", input.tool_name, p);
-                    self.evaluate_path_tool(p)
+                    self.evaluate_path_tool(p, &self.start_dir(input))
                 }
                 None => {
                     log::debug!("search tool '{}': no path in input, allowing", input.tool_name);
@@ -138,11 +166,15 @@ impl RuleSet {
                 }
             },
             // Known non-filesystem tools — always allow
-            "webfetch" | "websearch" | "task" | "askuserquestion"
+            "webfetch" | "websearch" | "task" | "agent" | "askuserquestion"
             | "todowrite" | "skill" | "sendmessage" | "teamcreate"
             | "teamdelete" | "enterplanmode" | "exitplanmode"
             | "taskcreate" | "taskget" | "taskupdate" | "tasklist"
-            | "taskoutput" | "taskstop" => {
+            | "taskoutput" | "taskstop" | "toolsearch" | "subagenthandback"
+            | "schedulewakeup" | "listagents" | "croncreate" | "crondelete"
+            | "cronlist" | "enterworktree" | "exitworktree"
+            | "listmcpresourcestool" | "readmcpresourcetool"
+            | "readmcpresourcedirtool" => {
                 log::debug!("known non-filesystem tool '{}', allowing", input.tool_name);
                 Verdict::Allow
             }
@@ -175,8 +207,11 @@ impl RuleSet {
 
         log::debug!("bash: evaluating command (len={})", command.len());
 
+        let base = self.start_dir(input);
+        log::debug!("bash: starting directory {}", base.display());
+
         // Single extraction pass — used by system_paths, internal-only, and blocked-files checks
-        let paths = bash_analyzer::extract_paths(command);
+        let paths = bash_analyzer::extract_paths_from(command, Some(&base));
         log::debug!("bash: extracted {} paths from command", paths.len());
         for ep in &paths {
             log::debug!("bash:   path='{}' context={:?}", ep.raw, ep.context);
@@ -201,8 +236,8 @@ impl RuleSet {
                 ) {
                     continue;
                 }
-                let resolved = resolve_ep(ep, &self.project_root);
-                if let Some(reason) = rule.check(&resolved) {
+                let resolved = resolve_ep(ep, &base);
+                if let Some(reason) = rule.check_with_glob(&resolved, ep.unquoted_glob) {
                     return Verdict::Deny(reason);
                 }
             }
@@ -239,7 +274,7 @@ impl RuleSet {
                         flag,
                         code_snippet,
                     } => {
-                        let resolved = resolve_target(&ep.raw, &self.project_root);
+                        let resolved = resolve_target(&ep.raw, &base);
                         if check_path_containment(
                             &resolved,
                             &self.project_root,
@@ -257,7 +292,7 @@ impl RuleSet {
                         }
                     }
                     _ => {
-                        let resolved = resolve_ep(ep, &self.project_root);
+                        let resolved = resolve_ep(ep, &base);
                         if let Some(reason) = check_path_containment(
                             &resolved,
                             &self.project_root,
@@ -283,7 +318,7 @@ impl RuleSet {
                 ) {
                     continue;
                 }
-                let resolved = resolve_ep(ep, &self.project_root);
+                let resolved = resolve_ep(ep, &base);
                 let is_dir_hint = ep.context.implies_directory();
                 if let Some(reason) = rule.check_with_hint(&resolved, is_dir_hint) {
                     return Verdict::Deny(reason);
@@ -301,8 +336,9 @@ impl RuleSet {
         Verdict::Allow
     }
 
-    /// Evaluate a single-path tool (Read, Write, Edit, NotebookEdit, Glob, Grep).
-    fn evaluate_path_tool(&self, path: &str) -> Verdict {
+    /// Evaluate a single-path tool (Read, Write, Edit, NotebookEdit, LSP, Glob, Grep).
+    /// Relative paths resolve against `base`.
+    fn evaluate_path_tool(&self, path: &str, base: &Path) -> Verdict {
         if !self.internal_access_only
             && self.blocked_files.is_none()
             && self.system_paths.is_none()
@@ -311,7 +347,7 @@ impl RuleSet {
             return Verdict::Allow;
         }
 
-        let resolved = resolve_target(path, &self.project_root);
+        let resolved = resolve_target(path, base);
         log::debug!("path_tool: resolved '{}' -> '{}'", path, resolved.display());
 
         // Order matches evaluate_bash: system_paths -> internal_access_only -> blocked_files.

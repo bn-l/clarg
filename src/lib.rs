@@ -8,5 +8,6 @@ pub mod internalonly;
 pub mod logging;
 pub mod output;
 pub mod router;
+pub mod shell_state;
 pub mod system_paths;
 pub mod util;

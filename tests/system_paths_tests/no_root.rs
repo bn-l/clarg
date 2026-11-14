@@ -106,3 +106,22 @@ fn test_no_root_does_not_block_root_followed_by_non_glob_segment() {
     assert!(r.check(Path::new("/foo")).is_none());
     assert!(r.check(Path::new("/somewhere-not-listed")).is_none());
 }
+
+// ============================================================================
+// check_with_glob: quoted glob characters are literal
+// ============================================================================
+
+#[test]
+fn test_check_with_glob_ignores_literal_glob_chars() {
+    let r = rule();
+    let p = Path::new("/* Landing, slot 1 *");
+    assert!(r.check_with_glob(p, false).is_none());
+    assert!(r.check_with_glob(p, true).is_some());
+    // `check` keeps the conservative behaviour for path tools.
+    assert!(r.check(p).is_some());
+}
+
+#[test]
+fn test_check_with_glob_still_blocks_exact_root() {
+    assert!(rule().check_with_glob(Path::new("/"), false).is_some());
+}

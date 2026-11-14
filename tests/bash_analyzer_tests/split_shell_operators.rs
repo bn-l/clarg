@@ -210,15 +210,62 @@ fn test_split_test_and_exec() {
 
 #[test]
 fn test_split_single_ampersand() {
-    // Single & is for background, not a split point
+    // Background `&` ends the command (trailing empty part dropped).
     let result = split_shell_operators("cmd &");
-    assert_eq!(result, vec!["cmd &"]);
+    assert_eq!(result, vec!["cmd "]);
 }
 
 #[test]
 fn test_split_ampersand_at_end() {
     let result = split_shell_operators("cmd1 && cmd2 &");
-    assert_eq!(result, vec!["cmd1 ", " cmd2 &"]);
+    assert_eq!(result, vec!["cmd1 ", " cmd2 "]);
+}
+
+#[test]
+fn test_split_background_ampersand_between_commands() {
+    let result = split_shell_operators("python3 x.py & cat /etc/passwd");
+    assert_eq!(result, vec!["python3 x.py ", " cat /etc/passwd"]);
+}
+
+#[test]
+fn test_split_fd_redirections_keep_ampersand() {
+    assert_eq!(split_shell_operators("ls 2>&1"), vec!["ls 2>&1"]);
+    assert_eq!(split_shell_operators("ls &> out"), vec!["ls &> out"]);
+    assert_eq!(split_shell_operators("ls &>> out"), vec!["ls &>> out"]);
+    assert_eq!(split_shell_operators("ls >&2"), vec!["ls >&2"]);
+    assert_eq!(split_shell_operators("cat <&0"), vec!["cat <&0"]);
+}
+
+#[test]
+fn test_split_pipe_ampersand() {
+    let result = split_shell_operators("make |& tee log");
+    assert_eq!(result, vec!["make ", " tee log"]);
+}
+
+#[test]
+fn test_split_unquoted_newline() {
+    let result = split_shell_operators("cd src\nrm -rf /");
+    assert_eq!(result, vec!["cd src", "rm -rf /"]);
+}
+
+#[test]
+fn test_split_quoted_newline_kept() {
+    let result = split_shell_operators("echo 'a\nb'\nls");
+    assert_eq!(result, vec!["echo 'a\nb'", "ls"]);
+}
+
+#[test]
+fn test_split_line_continuation_kept() {
+    let result = split_shell_operators("cat a \\\n  b");
+    assert_eq!(result, vec!["cat a \\\n  b"]);
+}
+
+#[test]
+fn test_split_with_ops_reports_pipe() {
+    use clarg::bash_analyzer::{Separator, split_shell_operators_with_ops};
+    let result = split_shell_operators_with_ops("echo / | xargs rm; ls");
+    let seps: Vec<Separator> = result.iter().map(|(_, s)| *s).collect();
+    assert_eq!(seps, vec![Separator::Pipe, Separator::Other, Separator::Other]);
 }
 
 #[test]

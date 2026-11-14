@@ -11,3 +11,4 @@ mod search_commands;
 mod sed_command;
 mod split_shell_operators;
 mod unknown_commands;
+mod shell_semantics;

@@ -242,3 +242,19 @@ fn test_no_system_dirs_with_no_root_flag_blocks_root_too() {
     assert!(r.check(Path::new("/etc/passwd")).is_some());
     assert!(r.check(Path::new("/tmp/scratch")).is_none());
 }
+
+#[test]
+fn test_no_system_dirs_blocks_raw_devices_but_not_safe_ones() {
+    let rule = clarg::system_paths::SystemPathsRule::new(
+        false,
+        true,
+        std::path::Path::new("/tmp/proj"),
+        std::path::Path::new("/tmp/proj"),
+    );
+    for blocked in ["/dev/disk2", "/dev/sda", "/dev/rdisk0"] {
+        assert!(rule.check(std::path::Path::new(blocked)).is_some(), "{blocked}");
+    }
+    for allowed in ["/dev/null", "/dev/stderr", "/dev/tty", "/dev/fd/3", "/dev/urandom"] {
+        assert!(rule.check(std::path::Path::new(allowed)).is_none(), "{allowed}");
+    }
+}
