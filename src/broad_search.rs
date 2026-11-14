@@ -40,18 +40,20 @@ impl BroadSearchRule {
             && self.is_home_or_above(&parent)
         {
             return Some(format!(
-                "Blocked by `clarg`: 'no_broad_search' prevents expanding '{}', which would list the contents of '{}' (your home folder or above it). Name the files you need, or glob inside a specific subfolder.",
+                "Blocked by `clarg`: 'no_broad_search' prevents expanding '{}', which would list the contents of '{}' ({}). Name the files you need, or glob inside a specific subfolder.",
                 ep.raw,
-                self.display(&parent)
+                self.display(&parent),
+                self.describe(&parent)
             ));
         }
         match &ep.context {
             PathContext::SearchRoot { command } => self.check_root(command, resolved),
             PathContext::InlineCodeRef { interpreter, .. } if self.is_home_or_above(resolved) => {
                 Some(format!(
-                    "Blocked by `clarg`: 'no_broad_search' prevents '{}' code from using '{}', which is your home folder or above it. Use a specific subfolder instead.",
+                    "Blocked by `clarg`: 'no_broad_search' prevents '{}' code from using '{}' ({}). Use a specific subfolder instead.",
                     interpreter,
-                    self.display(resolved)
+                    self.display(resolved),
+                    self.describe(resolved)
                 ))
             }
             _ => None,
@@ -62,11 +64,21 @@ impl BroadSearchRule {
     pub fn check_root(&self, command: &str, resolved: &Path) -> Option<String> {
         self.is_home_or_above(resolved).then(|| {
             format!(
-                "Blocked by `clarg`: 'no_broad_search' prevents '{}' from searching or listing '{}', which is your home folder or above it. Use the project or a specific subfolder instead (e.g. `~/projects/<name>`). To find a file by name, `mdfind -name <name>` searches the Spotlight index.",
+                "Blocked by `clarg`: 'no_broad_search' prevents '{}' from searching or listing '{}' ({}). Use the project or a specific subfolder instead (e.g. `~/projects/<name>`). To find a file by name, `mdfind -name <name>` searches the Spotlight index.",
                 command,
-                self.display(resolved)
+                self.display(resolved),
+                self.describe(resolved)
             )
         })
+    }
+
+    /// Messages are read by the agent, so they name the *user's* folder.
+    fn describe(&self, path: &Path) -> &'static str {
+        if self.homes.iter().any(|h| h == path) {
+            "the user's home folder"
+        } else {
+            "a folder above the user's home folder"
+        }
     }
 
     fn display(&self, path: &Path) -> String {
