@@ -88,8 +88,9 @@ fn main() -> ExitCode {
         return ExitCode::SUCCESS;
     }
 
-    // Initialize logging (must happen before run() so config loading is logged)
-    let _logger = logging::init(cli.log_dir.as_deref());
+    // Initialize logging before run() so config loading is logged. The
+    // directory comes from `--log-dir` or the YAML config's `log_dir`.
+    let _logger = logging::init(Config::log_dir_for(&cli).as_deref());
 
     match run(cli) {
         Ok(Verdict::Allow) => ExitCode::SUCCESS,

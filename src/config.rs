@@ -48,25 +48,44 @@ struct YamlConfig {
     special_flags: SpecialFlagsYaml,
 }
 
+/// Resolve a relative path against `CLAUDE_PROJECT_DIR`, so a `cd` during
+/// the session doesn't change what it points to.
+fn resolve_against_project_dir(path: PathBuf) -> PathBuf {
+    match std::env::var_os("CLAUDE_PROJECT_DIR") {
+        Some(project_dir) if path.is_relative() => PathBuf::from(project_dir).join(path),
+        _ => path,
+    }
+}
+
 impl Config {
+    /// Where to write logs, decided before logging starts (so the config
+    /// load itself is logged in the right place): `--log-dir`, or the YAML
+    /// config's `log_dir`, a relative one resolved against
+    /// `CLAUDE_PROJECT_DIR` like the config path. Problems reading the YAML
+    /// are ignored here; the real load reports them, logged to the default
+    /// directory.
+    pub fn log_dir_for(cli: &Cli) -> Option<PathBuf> {
+        let Some(config_path) = &cli.config_path else {
+            return cli.log_dir.clone();
+        };
+        let contents =
+            std::fs::read_to_string(resolve_against_project_dir(config_path.clone())).ok()?;
+        let yaml: YamlConfig = serde_yaml::from_str(&contents).ok()?;
+        yaml.log_dir.map(resolve_against_project_dir)
+    }
+
     pub fn from_cli(cli: Cli) -> Result<Self> {
         if let Some(config_path) = cli.config_path {
             // If the config path is relative, resolve it against CLAUDE_PROJECT_DIR
             // so that `cd` during a session doesn't break config loading.
-            let config_path = if config_path.is_relative() {
-                if let Some(project_dir) = std::env::var_os("CLAUDE_PROJECT_DIR") {
-                    let resolved = PathBuf::from(project_dir).join(&config_path);
-                    log::debug!(
-                        "resolved relative config path against CLAUDE_PROJECT_DIR: {}",
-                        resolved.display()
-                    );
-                    resolved
-                } else {
-                    config_path
-                }
-            } else {
-                config_path
-            };
+            let resolved = resolve_against_project_dir(config_path.clone());
+            if resolved != config_path {
+                log::debug!(
+                    "resolved relative config path against CLAUDE_PROJECT_DIR: {}",
+                    resolved.display()
+                );
+            }
+            let config_path = resolved;
             let config = Self::from_yaml(&config_path)?;
             log::info!("config loaded from YAML: {}", config_path.display());
             Ok(config)

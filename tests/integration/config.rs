@@ -429,6 +429,51 @@ fn run_clarg_env(args: &[&str], stdin: &str, env: &[(&str, &str)], remove: &[&st
 }
 
 #[test]
+fn test_yaml_log_dir_receives_the_log() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().canonicalize().unwrap();
+    let logs = project.join("yaml-logs");
+    let xdg = project.join("xdg");
+    let config = project.join("cfg.yaml");
+    std::fs::write(&config, format!("log_dir: {}\n", logs.display())).unwrap();
+    let input = hook_json_with_cwd("Read", serde_json::json!({"file_path": "a.txt"}), project.to_str().unwrap());
+
+    let (code, _) = run_clarg_env(
+        &[config.to_str().unwrap()],
+        &input,
+        &[("XDG_STATE_HOME", xdg.to_str().unwrap()), ("CLAUDE_PROJECT_DIR", project.to_str().unwrap())],
+        &[],
+        &project,
+    );
+    assert_eq!(code, 0);
+    assert!(logs.join("clarg.log").exists(), "log not written to the YAML log_dir");
+    assert!(!xdg.join("clarg").exists(), "log also went to the default directory");
+}
+
+#[test]
+fn test_yaml_relative_log_dir_resolves_against_project_dir() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().canonicalize().unwrap();
+    let elsewhere = tempfile::tempdir().unwrap();
+    std::fs::write(project.join("cfg.yaml"), "log_dir: logs/clarg\n").unwrap();
+    let input = hook_json_with_cwd("Read", serde_json::json!({"file_path": "a.txt"}), project.to_str().unwrap());
+
+    // Relative config path and log_dir, run from an unrelated directory.
+    let (code, _) = run_clarg_env(
+        &["cfg.yaml"],
+        &input,
+        &[
+            ("XDG_STATE_HOME", project.join("xdg").to_str().unwrap()),
+            ("CLAUDE_PROJECT_DIR", project.to_str().unwrap()),
+        ],
+        &[],
+        elsewhere.path(),
+    );
+    assert_eq!(code, 0);
+    assert!(project.join("logs/clarg/clarg.log").exists(), "relative log_dir not resolved against the project");
+}
+
+#[test]
 fn test_no_broad_search_without_home_fails_closed() {
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path().canonicalize().unwrap();

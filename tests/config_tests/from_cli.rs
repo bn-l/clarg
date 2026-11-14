@@ -248,3 +248,43 @@ internal_access_only: true
 }
 
 // ============================================================================
+
+// ============================================================================
+// Config::log_dir_for — decided before logging starts
+// ============================================================================
+
+fn cli_with(config_path: Option<PathBuf>, log_dir: Option<PathBuf>) -> Cli {
+    Cli {
+        config_path,
+        block_access_to: vec![],
+        commands_forbidden: vec![],
+        log_dir,
+        internal_access_only: false,
+        no_root: false,
+        no_system_dirs: false,
+        no_unknown_tools: false,
+        no_broad_search: false,
+    }
+}
+
+#[test]
+fn test_log_dir_for_cli_flag() {
+    let cli = cli_with(None, Some(PathBuf::from("/tmp/clarg-logs")));
+    assert_eq!(Config::log_dir_for(&cli), Some(PathBuf::from("/tmp/clarg-logs")));
+    assert_eq!(Config::log_dir_for(&cli_with(None, None)), None);
+}
+
+#[test]
+fn test_log_dir_for_yaml_config() {
+    let file = create_yaml_file("log_dir: /tmp/clarg-yaml-logs\n");
+    let cli = cli_with(Some(file.path().to_path_buf()), None);
+    assert_eq!(Config::log_dir_for(&cli), Some(PathBuf::from("/tmp/clarg-yaml-logs")));
+}
+
+#[test]
+fn test_log_dir_for_unreadable_yaml_falls_back_to_default() {
+    let file = create_yaml_file("special_flags:\n  no_rot: true\n");
+    assert_eq!(Config::log_dir_for(&cli_with(Some(file.path().to_path_buf()), None)), None);
+    let missing = cli_with(Some(PathBuf::from("/nonexistent/clarg.yaml")), None);
+    assert_eq!(Config::log_dir_for(&missing), None);
+}
