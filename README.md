@@ -133,7 +133,7 @@ To override the log directory:
 clarg -l /tmp/clarg-logs -b '.env' -i
 ```
 
-Or in YAML config:
+Or in YAML config (a relative path is resolved against the project directory):
 
 ```yaml
 log_dir: /tmp/clarg-logs
