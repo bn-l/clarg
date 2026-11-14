@@ -406,3 +406,40 @@ fn test_cli_no_broad_search_denies_listing_home() {
     let (code, stdout, _) = run_clarg(&["--no-broad-search"], &input);
     assert_eq!(code, 2, "stdout: {stdout}");
 }
+
+/// Run the binary with extra environment variables and a cwd.
+fn run_clarg_env(args: &[&str], stdin: &str, env: &[(&str, &str)], remove: &[&str], cwd: &std::path::Path) -> (i32, String) {
+    use std::io::Write;
+    let mut cmd = clarg_bin();
+    cmd.args(args).current_dir(cwd);
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    for k in remove {
+        cmd.env_remove(k);
+    }
+    cmd.stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let mut child = cmd.spawn().unwrap();
+    child.stdin.as_mut().unwrap().write_all(stdin.as_bytes()).unwrap();
+    drop(child.stdin.take());
+    let output = child.wait_with_output().unwrap();
+    (output.status.code().unwrap_or(-1), String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+#[test]
+fn test_no_broad_search_without_home_fails_closed() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().canonicalize().unwrap();
+    let input = hook_json_with_cwd("Bash", serde_json::json!({"command": "fd x /Users"}), project.to_str().unwrap());
+    let (code, stdout) = run_clarg_env(
+        &["--no-broad-search", "-l", project.join("logs").to_str().unwrap()],
+        &input,
+        &[("CLAUDE_PROJECT_DIR", project.to_str().unwrap())],
+        &["HOME"],
+        &project,
+    );
+    assert_eq!(code, 2, "expected deny, got stdout: {stdout}");
+    assert!(stdout.contains("HOME"), "reason should explain the missing HOME: {stdout}");
+}

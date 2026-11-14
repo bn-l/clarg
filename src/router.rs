@@ -111,7 +111,7 @@ impl RuleSet {
             blocked_commands,
             broad_search: if config.no_broad_search {
                 log::debug!("building broad_search rule");
-                BroadSearchRule::new()
+                Some(BroadSearchRule::new()?)
             } else {
                 None
             },

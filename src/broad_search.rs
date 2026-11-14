@@ -5,6 +5,7 @@
 //! known paths (`cat ~/.zshrc`) stay allowed.
 
 use crate::bash_analyzer::{ExtractedPath, PathContext};
+use eyre::{Result, bail};
 use crate::system_paths::contains_glob_meta;
 use std::path::{Component, Path, PathBuf};
 
@@ -14,16 +15,24 @@ pub struct BroadSearchRule {
 }
 
 impl BroadSearchRule {
-    /// `None` when `$HOME` is unknown (nothing to protect).
-    pub fn new() -> Option<Self> {
-        let home = PathBuf::from(std::env::var_os("HOME").filter(|h| !h.is_empty())?);
+    /// Fails when `$HOME` is unset or empty: the folder to protect would be
+    /// unknown, and a silently disabled rule would fail open.
+    pub fn new() -> Result<Self> {
+        let Some(home) = std::env::var_os("HOME").filter(|h| !h.is_empty()) else {
+            bail!(
+                "no_broad_search: the HOME environment variable is unset or empty, so \
+                 the home folder to protect is unknown; refusing to install a \
+                 silently-broken rule"
+            );
+        };
+        let home = PathBuf::from(home);
         let mut homes = vec![home.clone()];
         if let Ok(canonical) = home.canonicalize()
             && canonical != home
         {
             homes.push(canonical);
         }
-        Some(Self { homes })
+        Ok(Self { homes })
     }
 
     /// Is `path` the home folder or an ancestor of it (`/Users`, `/`)?
